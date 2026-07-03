@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>我的主页 — 丰盛云商商管 · 商户门户</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:#f5f7fa;color:#333;font-size:15px}
+  .topbar{background:#2980b9;color:#fff;padding:12px 20px;display:flex;align-items:center;justify-content:space-between}
+  .topbar h1{font-size:18px;font-weight:700}
+  .topbar a{color:#dce9f5;font-size:13px;text-decoration:none}
+  .nav{display:flex;background:#1a6699;overflow-x:auto}
+  .nav a{color:#c8dff0;padding:10px 20px;text-decoration:none;white-space:nowrap;font-size:14px}
+  .nav a.active,.nav a:hover{background:#2980b9;color:#fff}
+  .container{padding:16px;max-width:900px;margin:0 auto}
+  .card{background:#fff;border-radius:8px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+  .card h2{font-size:16px;color:#2980b9;margin-bottom:10px;border-bottom:1px solid #e8f0fa;padding-bottom:6px}
+  .stat-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+  .stat-box{flex:1 1 100px;min-width:100px;background:#fff;border-radius:8px;padding:10px 8px;box-shadow:0 1px 4px rgba(0,0,0,.08);text-align:center;overflow:hidden}
+  .stat-box .label{font-size:11px;color:#888;margin-bottom:4px;white-space:nowrap}
+  .stat-box .num{font-size:16px;font-weight:700;word-break:break-all}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{background:#e8f0fa;color:#2980b9;padding:8px 10px;text-align:left}
+  td{padding:8px 10px;border-bottom:1px solid #f0f0f0}
+  tr:last-child td{border:none}
+  .overdue td{background:#fff5f5;color:#c0392b}
+  .flash{position:fixed;top:60px;right:20px;z-index:999;padding:10px 16px;border-radius:6px;font-size:14px;max-width:360px}
+  .flash-success{background:#e8f8f5;color:#1a7a4a;border:1px solid #b2dfdb}
+  .flash-danger{background:#fdf0f0;color:#c0392b;border:1px solid #f5c6cb}
+  @media(max-width:600px){.stat-box{min-width:80px}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>丰盛云商商管 · 商户门户</h1>
+  <a href="{{ url_for('merchant_logout') }}">退出登录</a>
+</div>
+<div class="nav">
+  <a href="{{ url_for('merchant_dashboard') }}" class="active">我的主页</a>
+  <a href="{{ url_for('merchant_contract') }}">合同详情</a>
+  <a href="{{ url_for('merchant_rent') }}">租金情况</a>
+  <a href="{{ url_for('merchant_business') }}">经营数据</a>
+</div>
+<div class="container">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="flash flash-{{ cat }}">{{ msg }}</div>
+  {% endfor %}
+  {% endwith %}
+
+  <!-- 概要卡片 -->
+  <div class="card">
+    <h2>概 要</h2>
+    <div class="stat-row">
+      <div class="stat-box">
+        <div class="label">租赁开始日期</div>
+        <div class="num" style="color:#2980b9">{{ lease_start }}</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">合同剩余天数</div>
+        <div class="num" style="color:{{ '#27ae60' if days_left > 90 else '#e74c3c' }}">{{ days_left }}</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">距下次缴费天数</div>
+        <div class="num" style="color:#27ae60">{{ next_days }}</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">下次缴费租金</div>
+        <div class="num" style="color:#2980b9">{{ "¥{:,.2f}".format(next_rent) }}</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">下次缴费物业费</div>
+        <div class="num" style="color:#8e44ad">{{ "¥{:,.2f}".format(next_prop) }}</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">逾期金额</div>
+        <div class="num" style="color:#e74c3c">{{ "¥{:,.2f}".format(overdue_total) }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 逾期明细 -->
+  <div class="card">
+    <h2>逾期金额明细</h2>
+    {% if overdue_items %}
+    <table>
+      <tr>
+        <th>期次</th><th>应缴日期</th><th>应缴租金</th><th>已缴租金</th>
+        <th>欠缴租金</th><th>欠缴物业费</th><th>合计欠款</th>
+      </tr>
+      {% for item in overdue_items %}
+      <tr class="overdue">
+        <td>{{ item["期次"] }}</td>
+        <td>{{ item["应缴日期"] }}</td>
+        <td>{{ "¥{:,.2f}".format(item["应缴租金"]) }}</td>
+        <td>{{ "¥{:,.2f}".format(item["已缴租金"]) }}</td>
+        <td>{{ "¥{:,.2f}".format(item["欠缴租金"]) }}</td>
+        <td>{{ "¥{:,.2f}".format(item["欠缴物业费"]) }}</td>
+        <td>{{ "¥{:,.2f}".format(item["合计欠款"]) }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <p style="color:#27ae60;margin:10px 0;font-weight:600">无逾期</p>
+    {% endif %}
+  </div>
+</div>
+</body>
+</html>

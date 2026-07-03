@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>丰盛云商商管 · 登录</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .login-body { background: #f0f2f5; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+        .login-card { background: #fff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.10); width: 380px; max-width: 90vw; }
+        .login-card h1 { text-align: center; font-size: 24px; color: #4361ee; margin: 0 0 8px; }
+        .login-card .subtitle { text-align: center; color: #999; font-size: 13px; margin-bottom: 28px; }
+        .form-group { margin-bottom: 18px; }
+        .form-group label { display: block; font-size: 13px; color: #666; margin-bottom: 6px; }
+        .form-group input { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box; outline: none; transition: border-color 0.2s; }
+        .form-group input:focus { border-color: #4361ee; }
+        .btn-login { width: 100%; padding: 12px; background: #4361ee; color: #fff; border: none; border-radius: 6px; font-size: 15px; cursor: pointer; font-weight: 500; }
+        .btn-login:hover { background: #3a56d4; }
+        .flash { padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 13px; }
+        .flash-danger { background: #fff0f0; color: #d32f2f; border: 1px solid #ffcdd2; }
+        .flash-warning { background: #fff8e1; color: #f57c00; border: 1px solid #ffe082; }
+    </style>
+</head>
+<body class="login-body">
+    <div class="login-card">
+        <h1>丰盛云商商管</h1>
+        <div class="subtitle">商业管理系统</div>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="flash flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+        <form method="POST">
+            <div class="form-group">
+                <label>用户名</label>
+                <input type="text" name="username" placeholder="请输入用户名" required autofocus>
+            </div>
+            <div class="form-group">
+                <label>密码</label>
+                <input type="password" name="password" placeholder="请输入密码" required>
+            </div>
+            <button type="submit" class="btn-login">登 录</button>
+        </form>
+        <div style="text-align:center;margin-top:20px">
+            <a href="/merchant" style="color:#4361ee;font-size:13px;text-decoration:none">商户门户登录 →</a>
+        </div>
+    </div>
+</body>
+</html>

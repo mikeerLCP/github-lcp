@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}丰盛云商商管{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <div class="app-layout">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="sidebar-logo">丰盛云商商管</div>
+            <nav class="sidebar-nav">
+                <a href="/admin" class="nav-item {% if request.path == '/admin' %}active{% endif %}">
+                    <span class="nav-icon">📊</span> 仪表板
+                </a>
+                <a href="/admin/shops" class="nav-item {% if request.path.startswith('/admin/shops') %}active{% endif %}">
+                    <span class="nav-icon">🏪</span> 商铺管理
+                </a>
+                <a href="/admin/opportunities" class="nav-item {% if request.path.startswith('/admin/opportunities') %}active{% endif %}">
+                    <span class="nav-icon">🎯</span> 商机管理
+                </a>
+                <a href="/admin/contracts" class="nav-item {% if request.path.startswith('/admin/contracts') %}active{% endif %}">
+                    <span class="nav-icon">📋</span> 合同管理
+                </a>
+                <a href="/admin/rent" class="nav-item {% if request.path.startswith('/admin/rent') %}active{% endif %}">
+                    <span class="nav-icon">💰</span> 租金收缴
+                </a>
+                <a href="/admin/business" class="nav-item {% if request.path.startswith('/admin/business') %}active{% endif %}">
+                    <span class="nav-icon">📈</span> 经营数据
+                </a>
+                {% if user and user.角色 == '集团' %}
+                <a href="/admin/users" class="nav-item {% if request.path.startswith('/admin/users') %}active{% endif %}">
+                    <span class="nav-icon">👥</span> 用户管理
+                </a>
+                <a href="/admin/logs" class="nav-item {% if request.path.startswith('/admin/logs') %}active{% endif %}">
+                    <span class="nav-icon">📝</span> 操作日志
+                </a>
+                {% endif %}
+            </nav>
+            <div class="sidebar-footer">
+                {% if user %}
+                <div class="user-info">
+                    <div class="user-name">{{ user.用户名 }}</div>
+                    <div class="user-role">{{ user.角色 }}管理员</div>
+                    {% if user.所属项目 %}<div class="user-project">{{ user.所属项目 }}</div>{% endif %}
+                </div>
+                {% endif %}
+                <a href="/logout" class="btn-logout">退出登录</a>
+            </div>
+        </aside>
+
+        <!-- 主内容 -->
+        <main class="main-content">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="flash-messages">
+                {% for category, message in messages %}
+                <div class="flash flash-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endwith %}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    {%- if user %}
+    <script>
+    window._currentUserRole = '{{ user.角色 }}';
+    window._currentUserProject = '{{ user.get("所属项目", "") }}';
+    window._isSubcompany = window._currentUserRole === '子公司';
+    </script>
+    {%- endif %}
+    {% block scripts %}{% endblock %}
+</body>
+</html>

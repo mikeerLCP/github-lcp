@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}LCP商管 · 操作日志{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">📝 操作日志</h1>
+</div>
+
+<div class="card">
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>时间</th><th>操作人</th><th>角色</th><th>类型</th>
+                    <th>模块</th><th>描述</th><th>记录ID</th><th>IP地址</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for l in logs %}
+                <tr>
+                    <td>{{ l.操作时间 }}</td>
+                    <td>{{ l.操作人 }}</td>
+                    <td>{{ l.角色 }}</td>
+                    <td>{{ l.操作类型 }}</td>
+                    <td>{{ l.操作模块 }}</td>
+                    <td>{{ l.操作描述 }}</td>
+                    <td>{{ l.记录ID }}</td>
+                    <td>{{ l.IP地址 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

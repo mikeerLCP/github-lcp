@@ -1,0 +1,698 @@
+{% extends "base.html" %}
+{% block title %}LCP商管 · 商机管理{% endblock %}
+{% block head %}
+<style>
+.stage-blue { background:#e3f2fd; color:#1565c0; }
+.stage-orange { background:#fff3e0; color:#e65100; }
+.stage-green { background:#e8f5e9; color:#2e7d32; }
+.stage-red { background:#ffebee; color:#c62828; }
+.stage-gray { background:#f5f5f5; color:#999; }
+.filter-chips { display:flex; flex-wrap:wrap; gap:4px; }
+.filter-chip { font-size:11px; padding:3px 8px; border-radius:12px; border:1px solid #ddd; cursor:pointer; background:#fff; }
+.filter-chip.active { background:#4361ee; color:#fff; border-color:#4361ee; }
+.modal-box.wide { max-width:900px; }
+.section-label { font-size:12px; font-weight:600; color:#888; margin:10px 0 4px; padding-bottom:4px; border-bottom:1px solid #eee; }
+.follow-item { padding:6px 8px; font-size:12px; border-bottom:1px solid #f0f0f0; display:none; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">🎯 商机管理</h1>
+    <div class="btn-group">
+        <button class="btn btn-primary" onclick="addOpp()">+ 新增商机</button>
+        <button class="btn btn-outline btn-sm" onclick="batchEditOpp()">✏️ 编辑</button>
+        <button class="btn btn-outline btn-sm" onclick="batchFollowUp()">📝 跟进</button>
+        <button class="btn btn-success btn-sm" onclick="batchDeposit()">💰 意向金</button>
+        <button class="btn btn-danger btn-sm" onclick="batchDeleteOpp()">🗑️ 删除</button>
+    </div>
+</div>
+
+<div class="card">
+    <!-- 筛选栏 -->
+    <div class="filter-bar" style="flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:12px;color:#888;">项目：</span>
+            <div class="filter-chips" id="filterProjects">
+                <span class="filter-chip active" data-val="" onclick="toggleChip(this,'filterProjects')">全部</span>
+                {% for p in projects %}
+                <span class="filter-chip" data-val="{{ p }}" onclick="toggleChip(this,'filterProjects')">{{ p }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+            <span style="font-size:12px;color:#888;">阶段：</span>
+            <div class="filter-chips" id="filterStages">
+                <span class="filter-chip active" data-val="" onclick="toggleChip(this,'filterStages')">全部</span>
+                {% for s in stages %}
+                <span class="filter-chip" data-val="{{ s }}" onclick="toggleChip(this,'filterStages')">{{ s }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
+            <span style="font-size:12px;color:#888;">结果：</span>
+            <div class="filter-chips" id="filterResults">
+                <span class="filter-chip active" data-val="" onclick="toggleChip(this,'filterResults')">全部</span>
+                {% for r in follow_results %}
+                <span class="filter-chip" data-val="{{ r }}" onclick="toggleChip(this,'filterResults')">{{ r }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:6px;">
+            <input type="text" id="filterKeyword" placeholder="搜索编号/商户名/联系人..." oninput="filterOpp()">
+            <button class="btn btn-sm btn-primary" onclick="filterOpp()">🔍 筛选</button>
+            <button class="btn btn-sm btn-outline" onclick="clearOppFilter()">✕ 清空</button>
+            <span style="font-size:12px;color:#888;margin-left:8px;" id="selectedCount">已选 0 条</span>
+        </div>
+    </div>
+
+    <!-- 表格 -->
+    <div class="table-wrapper">
+        <table id="oppTable" style="font-size:12px;">
+            <thead>
+                <tr>
+                    <th style="width:36px;"><input type="checkbox" class="check-all" onclick="toggleAll(this)"></th>
+                    <th>序号</th><th>当前阶段</th><th>最近跟进日期</th><th>跟进结果</th>
+                    <th>意向主体</th><th>商户名称</th><th>意向项目</th><th>意向租赁期限(年)</th>
+                    <th>意向业态</th><th>意向铺位</th><th>建筑面积(㎡)</th><th>意向租金单价</th>
+                    <th>物业服务费单价</th><th>支付周期</th><th>意向金金额(元)</th><th>意向金支付日期</th>
+                    <th>意向金去向</th><th>联系人</th><th>联系电话</th><th>负责人</th>
+                    <th>商机来源</th><th>首次接洽时间</th><th>备注</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for o in opps %}
+                <tr data-project="{{ o.意向项目 }}" data-stage="{{ o.当前阶段 }}" data-result="{{ o.跟进结果 }}" data-no="{{ o.商机编号 }}">
+                    <td><input type="checkbox" name="ids" value="{{ o.商机编号 }}" class="row-check"></td>
+                    <td style="text-align:center">{{ loop.index }}</td>
+                    <td class="text-center">
+                        {% set stage = o.当前阶段 or '初步接洽' %}
+                        {% if stage == '已支付意向金' or stage == '已转合同' %}
+                        <span class="badge stage-green">{{ stage }}</span>
+                        {% elif stage in ('谈判协商','意向确认') %}
+                        <span class="badge stage-orange">{{ stage }}</span>
+                        {% elif stage in ('初步接洽','需求确认') %}
+                        <span class="badge stage-blue">{{ stage }}</span>
+                        {% elif o.跟进结果 == '已流失' %}
+                        <span class="badge stage-red">已流失</span>
+                        {% else %}
+                        <span class="badge stage-gray">{{ stage }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ o.最近跟进日期 or '' }}</td>
+                    <td>
+                        {% if o.跟进结果 == '已流失' %}<span class="badge stage-red">已流失</span>
+                        {% elif o.跟进结果 == '已转合同' %}<span class="badge stage-green">已转合同</span>
+                        {% else %}{{ o.跟进结果 or '' }}{% endif %}
+                    </td>
+                    <td>{{ o.意向主体 or '' }}</td>
+                    <td><strong>{{ o.商户名称 }}</strong></td>
+                    <td>{{ o.意向项目 or '' }}</td>
+                    <td style="text-align:center">{{ o['意向租赁期限（年）'] or '' }}</td>
+                    <td>
+                        {% if o.意向业态 %}
+                        <div class="biz-chips">
+                            {% for bt in o.意向业态.split('、') %}
+                            {% if bt %}<span class="biz-chip">{{ bt }}</span>{% endif %}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td>{{ o.意向铺位 or '' }}</td>
+                    <td style="text-align:center">{{ o['建筑面积(㎡)'] or '' }}</td>
+                    <td style="text-align:center">{{ o['意向租金单价(元/㎡/天)'] or '' }}</td>
+                    <td style="text-align:center">{{ o['物业服务费单价(元/㎡/月)'] or '' }}</td>
+                    <td style="text-align:center">{{ o.支付周期 or '' }}</td>
+                    <td style="text-align:center">
+                        {% if o['意向金金额(元)'] and o['意向金金额(元)'] != '0' and o['意向金金额(元)'] != '0.0' %}
+                        ¥{{ o['意向金金额(元)'] }}
+                        {% else %}--{% endif %}
+                    </td>
+                    <td>{{ o.意向金支付日期 or '' }}</td>
+                    <td>{{ o.意向金去向 or '' }}</td>
+                    <td>{{ o.联系人 or '' }}</td>
+                    <td>{{ o.联系电话 or '' }}</td>
+                    <td>{{ o.负责人 or '' }}</td>
+                    <td>{{ o.商机来源 or '' }}</td>
+                    <td>{{ o.首次接洽日期 or '' }}</td>
+                    <td>{{ (o.备注 or '')[:15] }}{% if o.备注 and o.备注|length > 15 %}...{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 新增/编辑 Modal -->
+<div class="modal-overlay" id="oppModal">
+    <div class="modal-box" style="max-width:600px;">
+        <button class="modal-close" onclick="closeModal('oppModal')">✕</button>
+        <h3 id="oppModalTitle">新增商机</h3>
+        <form method="POST" action="/admin/opportunities/add" id="oppForm" onsubmit="return prepareOppSubmit()">
+            <input type="hidden" name="商机编号" id="oppNo">
+            <!-- 对齐桌面原型字段顺序 -->
+            <div class="form-grid">
+                <div class="form-group"><label>意向主体</label><input name="意向主体" id="oppSubject"></div>
+                <div class="form-group"><label>商户名称 *</label><input name="商户名称" id="oppMerchant" required></div>
+                <div class="form-group"><label>联系人</label><input name="联系人" id="oppContact"></div>
+                <div class="form-group"><label>联系电话</label><input name="联系电话" id="oppPhone"></div>
+                <div class="form-group"><label>意向项目</label>
+                    <select name="意向项目" id="oppProject">
+                        <option value=""></option>
+                        {% for p in projects %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="form-group"><label>意向业态</label>
+                    <select name="意向业态" id="oppBiz">
+                        <option value=""></option>
+                        {% for b in biz_types %}<option value="{{ b }}">{{ b }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="form-group"><label>意向租赁期限（年）</label><input name="意向租赁期限" id="oppTerm"></div>
+                <div class="form-group"><label>意向铺位</label>
+                    <div style="display:flex;gap:4px;">
+                        <input name="意向铺位" id="oppShop" list="oppShopList" style="flex:1;" readonly onfocus="this.removeAttribute('readonly')">
+                        <button type="button" class="btn btn-outline btn-sm" onclick="searchShopsForOpp()">选择铺位</button>
+                    </div>
+                </div>
+                <div class="form-group"><label>建筑面积(㎡)</label><input name="建筑面积" id="oppArea" readonly style="background:#f5f5f5;"></div>
+                <div class="form-group"><label>商机来源</label>
+                    <select name="商机来源" id="oppSource">
+                        <option value=""></option>
+                        <option value="主动拓展">主动拓展</option>
+                        <option value="商户咨询">商户咨询</option>
+                        <option value="网络推广">网络推广</option>
+                        <option value="朋友介绍">朋友介绍</option>
+                        <option value="其他">其他</option>
+                    </select>
+                </div>
+                <div class="form-group"><label>当前阶段</label>
+                    <select name="当前阶段" id="oppStage">
+                        {% for s in stages %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="form-group"><label>首次接洽日期</label><input type="date" name="首次接洽日期" id="oppFirstDate"></div>
+                <div class="form-group"><label>意向租金单价(元/㎡/天)</label><input name="意向租金单价" id="oppRent" step="0.01"></div>
+                <div class="form-group"><label>物业服务费单价(元/㎡/月)</label><input name="物业服务费单价" id="oppPropFee" step="0.01"></div>
+                <div class="form-group"><label>支付周期</label>
+                    <select name="支付周期" id="oppCycle">
+                        <option value="月度">月度</option><option value="季度">季度</option><option value="半年">半年</option><option value="年度">年度</option>
+                    </select>
+                </div>
+                <div class="form-group"><label>负责人</label><input name="负责人" id="oppManager"></div>
+                <div class="form-group"><label>备注</label><input name="备注" id="oppRemark"></div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">保存</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal('oppModal')">取消</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 选择铺位 Modal -->
+<div class="modal-overlay" id="shopSelectModal">
+    <div class="modal-box" style="max-width:920px;">
+        <button class="modal-close" onclick="closeModal('shopSelectModal')">✕</button>
+        <h3>🏢 选择意向铺位</h3>
+        <div style="max-height:380px;overflow-y:auto;border:1px solid #e0e0e0;border-radius:4px;">
+            <table id="shopSelectTable" style="font-size:12px;width:100%;border-collapse:collapse;">
+                <thead style="background:#f5f7fa;position:sticky;top:0;">
+                    <tr>
+                        <th style="padding:6px 8px;text-align:center;width:50px;"></th>
+                        <th style="padding:6px 8px;text-align:center;">铺位号</th>
+                        <th style="padding:6px 8px;text-align:center;">所属项目</th>
+                        <th style="padding:6px 8px;">适用业态</th>
+                        <th style="padding:6px 8px;text-align:center;">建筑面积(㎡)</th>
+                        <th style="padding:6px 8px;text-align:center;">基准租金(元/㎡/天)</th>
+                        <th style="padding:6px 8px;text-align:center;">状态</th>
+                    </tr>
+                </thead>
+                <tbody id="shopSelectBody"></tbody>
+            </table>
+        </div>
+        <div class="form-actions" style="margin-top:12px;">
+            <button type="button" class="btn btn-primary" onclick="confirmShopSelect()">确认选择</button>
+            <button type="button" class="btn btn-outline" onclick="closeModal('shopSelectModal')">取消</button>
+        </div>
+    </div>
+</div>
+
+<!-- 跟进记录 Modal -->
+<div class="modal-overlay" id="followModal">
+    <div class="modal-box wide">
+        <button class="modal-close" onclick="closeModal('followModal')">✕</button>
+        <h3 id="followTitle">📝 跟进记录</h3>
+        <!-- 历史跟进记录表格 -->
+        <div class="section-label">历史跟进记录</div>
+        <div style="max-height:220px;overflow-y:auto;margin-bottom:12px;border:1px solid #e0e0e0;border-radius:4px;">
+            <table id="followHistoryTable" style="font-size:12px;width:100%;border-collapse:collapse;">
+                <thead style="background:#f5f7fa;position:sticky;top:0;">
+                    <tr>
+                        <th style="padding:6px 8px;text-align:center;width:100px;">跟进日期</th>
+                        <th style="padding:6px 8px;text-align:center;width:90px;">阶段</th>
+                        <th style="padding:6px 8px;width:220px;">跟进内容</th>
+                        <th style="padding:6px 8px;text-align:center;width:80px;">跟进结果</th>
+                        <th style="padding:6px 8px;text-align:center;width:100px;">下次计划日期</th>
+                        <th style="padding:6px 8px;text-align:center;width:70px;">跟进人</th>
+                    </tr>
+                </thead>
+                <tbody id="followHistoryBody"></tbody>
+            </table>
+        </div>
+        <!-- 新增跟进记录 -->
+        <div class="section-label">新增跟进记录</div>
+        <div class="form-grid">
+            <div class="form-group"><label>跟进日期</label><input type="date" id="fuDate"></div>
+            <div class="form-group"><label>阶段推进至</label>
+                <select id="fuNewStage">
+                    {% for s in stages %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group" style="grid-column:1/-1;"><label>跟进内容</label>
+                <textarea id="fuContent" rows="2"></textarea>
+            </div>
+            <div class="form-group"><label>跟进结果</label>
+                <select id="fuResult">
+                    {% for r in follow_results %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group"><label>下次计划日期</label><input type="date" id="fuNextDate"></div>
+            <div class="form-group"><label>跟进人</label><input type="text" id="fuFollower"></div>
+        </div>
+        <div class="form-actions">
+            <button type="button" class="btn btn-primary" onclick="saveFollowUp()">💾 保存跟进记录</button>
+            <button type="button" class="btn btn-outline" onclick="closeModal('followModal')">关闭</button>
+        </div>
+    </div>
+</div>
+
+<!-- 意向金 Modal -->
+<div class="modal-overlay" id="depositModal">
+    <div class="modal-box" style="max-width:500px;">
+        <button class="modal-close" onclick="closeModal('depositModal')">✕</button>
+        <h3>💰 支付意向金</h3>
+        <input type="hidden" id="depOppNo">
+        <div class="form-grid">
+            <div class="form-group">
+                <label>商户名称</label>
+                <span id="depMerchantName" style="font-weight:600;color:#2980b9;"></span>
+            </div>
+            <div class="form-group">
+                <label>意向项目</label>
+                <span id="depProjectName" style="color:#666;"></span>
+            </div>
+            <div class="form-group"><label>意向金金额(元)</label><input type="number" id="depAmount" step="0.01" required></div>
+            <div class="form-group"><label>支付日期</label><input type="date" id="depDate" required></div>
+            <div class="form-group"><label>备注</label><input type="text" id="depRemark"></div>
+            <div class="form-group"><label>意向金去向</label>
+                <select id="depDest">
+                    {% for d in deposit_dest %}<option value="{{ d }}">{{ d or '--请选择--' }}</option>{% endfor %}
+                </select>
+            </div>
+        </div>
+        <div style="color:#888;font-size:12px;margin:8px 0;padding:8px;background:#f9f9f9;border-radius:4px;">
+            💡 支付意向金后，阶段将自动更新为「已支付意向金」。<br>
+            您可点击「保存并前往签合同」直接跳转到合同管理模块。
+        </div>
+        <div class="form-actions">
+            <button type="button" class="btn btn-primary" onclick="saveDeposit(false)">仅保存意向金</button>
+            <button type="button" class="btn btn-success" onclick="saveDeposit(true)">保存并前往签合同</button>
+            <button type="button" class="btn btn-outline" onclick="closeModal('depositModal')">取消</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+function toLocalDateStr(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+}
+
+const oppsData = {{ opps | tojson }};
+const stages = {{ stages | tojson }};
+let currentFollowOppNo = '';
+let currentDepOppNo = '';
+
+function openModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+// 全选 / 已选计数
+function toggleAll(cb) {
+    document.querySelectorAll('.row-check').forEach(c => c.checked = cb.checked);
+    updateSelectedCount();
+}
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('row-check')) updateSelectedCount();
+});
+function updateSelectedCount() {
+    const count = document.querySelectorAll('.row-check:checked').length;
+    document.getElementById('selectedCount').textContent = '已选 ' + count + ' 条';
+}
+function getSelectedOppNos() {
+    return Array.from(document.querySelectorAll('.row-check:checked')).map(cb => cb.value);
+}
+
+// 批量编辑
+function batchEditOpp() {
+    const selected = getSelectedOppNos();
+    if (selected.length === 0) { alert('请先勾选要编辑的商机'); return; }
+    if (selected.length > 1) { alert('编辑商机一次只能选择一条，请只勾选一个'); return; }
+    editOpp(selected[0]);
+}
+
+// 批量跟进
+function batchFollowUp() {
+    const selected = getSelectedOppNos();
+    if (selected.length === 0) { alert('请先勾选要跟进的商机'); return; }
+    if (selected.length > 1) { alert('跟进商机一次只能选择一条，请只勾选一个'); return; }
+    openFollowUp(selected[0]);
+}
+
+// 批量意向金
+function batchDeposit() {
+    const selected = getSelectedOppNos();
+    if (selected.length === 0) { alert('请先勾选要登记意向金的商机'); return; }
+    if (selected.length > 1) { alert('意向金登记一次只能选择一条，请只勾选一个'); return; }
+    openDeposit(selected[0]);
+}
+
+// 批量删除
+function batchDeleteOpp() {
+    const selected = getSelectedOppNos();
+    if (selected.length === 0) { alert('请先勾选要删除的商机'); return; }
+    if (!confirm('确定删除选中的 ' + selected.length + ' 个商机？')) return;
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/admin/opportunities/batch_delete';
+    selected.forEach(no => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'opp_nos';
+        input.value = no;
+        form.appendChild(input);
+    });
+    document.body.appendChild(form);
+    form.submit();
+}
+
+// 自动生成商机编号
+function genOppNo() {
+    const now = new Date();
+    const y = now.getFullYear().toString().slice(2);
+    const m = ('0'+(now.getMonth()+1)).slice(-2);
+    const d = ('0'+now.getDate()).slice(-2);
+    const h = ('0'+now.getHours()).slice(-2);
+    const min = ('0'+now.getMinutes()).slice(-2);
+    return 'OPP-' + y + m + d + h + min;
+}
+
+function resetOppForm() {
+    document.getElementById('oppNo').value = genOppNo();
+    ['oppSubject','oppMerchant','oppContact','oppPhone','oppShop','oppTerm',
+     'oppArea','oppRent','oppPropFee','oppManager','oppRemark'].forEach(id => {
+        document.getElementById(id).value = '';
+    });
+    document.getElementById('oppProject').value = window._isSubcompany ? window._currentUserProject : '';
+    document.getElementById('oppBiz').value = '';
+    document.getElementById('oppStage').value = '初步接洽';
+    document.getElementById('oppSource').value = '';
+    document.getElementById('oppCycle').value = '月度';
+    document.getElementById('oppFirstDate').value = toLocalDateStr(new Date());
+    document.getElementById('oppBiz').value = '';
+    document.getElementById('oppModalTitle').textContent = '新增商机';
+}
+
+function addOpp() {
+    resetOppForm();
+    openModal('oppModal');
+}
+
+function prepareOppSubmit() {
+    // 意向业态已直接绑定到 select name="意向业态"，无需额外处理
+    return true;
+}
+
+function editOpp(oppNo) {
+    const o = oppsData.find(o => o.商机编号 === oppNo);
+    if (!o) return;
+    document.getElementById('oppModalTitle').textContent = '编辑商机 - ' + oppNo;
+    document.getElementById('oppNo').value = o.商机编号;
+    document.getElementById('oppSubject').value = o.意向主体 || '';
+    document.getElementById('oppMerchant').value = o.商户名称 || '';
+    document.getElementById('oppContact').value = o.联系人 || '';
+    document.getElementById('oppPhone').value = o.联系电话 || '';
+    document.getElementById('oppProject').value = o.意向项目 || '';
+    document.getElementById('oppBiz').value = o.意向业态 || '';
+    document.getElementById('oppShop').value = o.意向铺位 || '';
+    document.getElementById('oppTerm').value = o['意向租赁期限（年）'] || '';
+    document.getElementById('oppArea').value = o['建筑面积(㎡)'] || '';
+    document.getElementById('oppSource').value = o.商机来源 || '';
+    document.getElementById('oppStage').value = o.当前阶段 || '初步接洽';
+    document.getElementById('oppFirstDate').value = o.首次接洽日期 || '';
+    document.getElementById('oppRent').value = o['意向租金单价(元/㎡/天)'] || '';
+    document.getElementById('oppPropFee').value = o['物业服务费单价(元/㎡/月)'] || '';
+    document.getElementById('oppCycle').value = o.支付周期 || '月度';
+    document.getElementById('oppManager').value = o.负责人 || '';
+    document.getElementById('oppRemark').value = o.备注 || '';
+    openModal('oppModal');
+}
+
+function deleteOpp(oppNo) {
+    if (!confirm('确定删除商机 ' + oppNo + '？')) return;
+    window.location.href = '/admin/opportunities/delete/' + encodeURIComponent(oppNo);
+}
+
+// ===== 选择铺位（弹窗表格，对标桌面原型） =====
+let shopSelectCache = []; // 缓存当前查询结果
+let shopSelectedRow = null;
+
+function searchShopsForOpp() {
+    const project = document.getElementById('oppProject').value;
+    const bizVal = document.getElementById('oppBiz').value;
+    if (!project) { alert('请先选择意向项目'); return; }
+    if (!bizVal) { alert('请先选择意向业态'); return; }
+    fetch('/api/shops-by-project?project=' + encodeURIComponent(project) + '&biz_types=' + encodeURIComponent(bizVal))
+        .then(r => r.json())
+        .then(data => {
+            shopSelectCache = data;
+            shopSelectedRow = null;
+            const tbody = document.getElementById('shopSelectBody');
+            if (!data.length) {
+                tbody.innerHTML = '<tr><td colspan="7" style="color:#aaa;text-align:center;padding:20px;">该项目下暂无符合条件的空置铺位</td></tr>';
+            } else {
+                let html = '';
+                data.forEach((s, i) => {
+                    const bg = i % 2 === 0 ? '#f7faff' : '#ffffff';
+                    html += `<tr style="background:${bg};cursor:pointer;" onclick="pickShopRow(this, ${i})"
+                                data-idx="${i}">
+                        <td style="padding:6px 8px;text-align:center;"><input type="radio" name="shopRadio" id="shopRadio${i}" onclick="event.stopPropagation()"></td>
+                        <td style="padding:6px 8px;text-align:center;">${s['铺位号']}</td>
+                        <td style="padding:6px 8px;text-align:center;">${s['所属项目']}</td>
+                        <td style="padding:6px 8px;">${s['适用业态']}</td>
+                        <td style="padding:6px 8px;text-align:center;">${s['建筑面积(㎡)']}</td>
+                        <td style="padding:6px 8px;text-align:center;">${s['基准租金(元/㎡/天)']}</td>
+                        <td style="padding:6px 8px;text-align:center;">${s['铺位状态']}</td>
+                    </tr>`;
+                });
+                tbody.innerHTML = html;
+            }
+            openModal('shopSelectModal');
+        });
+}
+
+function pickShopRow(tr, idx) {
+    // 选中 radio + 高亮行
+    document.querySelectorAll('#shopSelectBody tr').forEach(r => {
+        r.style.background = '';
+    });
+    const radio = document.getElementById('shopRadio' + idx);
+    if (radio) radio.checked = true;
+    tr.style.background = '#d0e4ff';
+    shopSelectedRow = idx;
+}
+
+function confirmShopSelect() {
+    if (shopSelectedRow === null) { alert('请先点选一个铺位'); return; }
+    const s = shopSelectCache[shopSelectedRow];
+    document.getElementById('oppShop').value = s['铺位号'];
+    // 自动填充建筑面积（对标原型联动逻辑）
+    document.getElementById('oppArea').value = s['建筑面积(㎡)'];
+    closeModal('shopSelectModal');
+}
+
+// ===== 跟进记录 =====
+function openFollowUp(oppNo) {
+    currentFollowOppNo = oppNo;
+    const o = oppsData.find(o => o.商机编号 === oppNo);
+    document.getElementById('followTitle').textContent = '📝 跟进记录 - ' + (o ? o.商户名称 || oppNo : oppNo);
+    document.getElementById('fuDate').value = toLocalDateStr(new Date());
+    document.getElementById('fuNewStage').value = o ? (o.当前阶段 || '初步接洽') : '初步接洽';
+    document.getElementById('fuResult').value = o ? (o.跟进结果 || '继续跟进') : '继续跟进';
+    document.getElementById('fuContent').value = '';
+    document.getElementById('fuNextDate').value = '';
+    document.getElementById('fuFollower').value = o ? (o.负责人 || '') : '';
+
+    // 历史记录（按原型字段名读取，兼容旧字段名）
+    const records = (o && o.跟进记录) ? (Array.isArray(o.跟进记录) ? o.跟进记录 : (
+        typeof o.跟进记录 === 'string' ? JSON.parse(o.跟进记录||'[]') : []
+    )) : [];
+    const tbody = document.getElementById('followHistoryBody');
+    if (!records.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="color:#aaa;text-align:center;padding:20px;">暂无跟进记录</td></tr>';
+    } else {
+        let html = '';
+        records.slice().reverse().forEach((r, i) => {
+            const bg = i % 2 === 0 ? '#f7faff' : '#ffffff';
+            html += `<tr style="background:${bg};">
+                <td style="padding:5px 8px;text-align:center;">${r.跟进日期 || r.日期 || ''}</td>
+                <td style="padding:5px 8px;text-align:center;">${r.阶段 || r.新阶段 || ''}</td>
+                <td style="padding:5px 8px;">${r.跟进内容 || r.内容 || ''}</td>
+                <td style="padding:5px 8px;text-align:center;">${r.跟进结果 || r.结果 || ''}</td>
+                <td style="padding:5px 8px;text-align:center;">${r.下次计划日期 || ''}</td>
+                <td style="padding:5px 8px;text-align:center;">${r.跟进人 || ''}</td>
+            </tr>`;
+        });
+        tbody.innerHTML = html;
+    }
+    openModal('followModal');
+}
+
+function saveFollowUp() {
+    const content = document.getElementById('fuContent').value.trim();
+    if (!content) { alert('跟进内容不能为空'); return; }
+    const record = {
+        "跟进日期":    document.getElementById('fuDate').value,
+        "阶段":        document.getElementById('fuNewStage').value,
+        "跟进内容":    content,
+        "跟进结果":    document.getElementById('fuResult').value,
+        "下次计划日期": document.getElementById('fuNextDate').value,
+        "跟进人":      document.getElementById('fuFollower').value.trim(),
+    };
+    fetch('/api/opportunity/follow-up', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({商机编号: currentFollowOppNo, 记录: record})
+    }).then(r => r.json()).then(res => {
+        if (res.ok) { closeModal('followModal'); location.reload(); }
+        else alert(res.error || '保存失败');
+    });
+}
+
+// ===== 意向金 =====
+function openDeposit(oppNo) {
+    currentDepOppNo = oppNo;
+    const o = oppsData.find(o => o.商机编号 === oppNo);
+    document.getElementById('depOppNo').value = oppNo;
+    document.getElementById('depMerchantName').textContent = o ? (o.商户名称 || '') : '';
+    document.getElementById('depProjectName').textContent = o ? (o.意向项目 || '') : '';
+    document.getElementById('depAmount').value = o ? (o['意向金金额(元)'] || '') : '';
+    document.getElementById('depDate').value = toLocalDateStr(new Date());
+    document.getElementById('depRemark').value = o ? (o.备注 || '') : '';
+    document.getElementById('depDest').value = o ? (o.意向金去向 || '') : '';
+    openModal('depositModal');
+}
+
+function saveDeposit(goContract) {
+    const amount = document.getElementById('depAmount').value.trim();
+    if (!amount) { alert('请填写意向金金额'); return; }
+    if (parseFloat(amount) <= 0) { alert('意向金金额需大于0'); return; }
+    const payload = {
+        商机编号: currentDepOppNo,
+        金额: amount,
+        支付日期: document.getElementById('depDate').value,
+        去向: document.getElementById('depDest').value,
+        备注: document.getElementById('depRemark').value.trim(),
+    };
+    fetch('/api/opportunity/deposit', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+    }).then(r => r.json()).then(res => {
+        if (res.ok) {
+            closeModal('depositModal');
+            if (goContract) {
+                // 跳转到合同管理模块，预填商户信息
+                const o = oppsData.find(o => o.商机编号 === currentDepOppNo);
+                const params = new URLSearchParams();
+                if (o) {
+                    if (o.商户名称) params.set('pf_name', o.商户名称);
+                    if (o.意向业态) params.set('pf_biz', o.意向业态);
+                    if (o.意向项目) params.set('pf_project', o.意向项目);
+                    if (o.联系电话) params.set('pf_phone', o.联系电话);
+                    if (o.联系人) params.set('pf_contact', o.联系人);
+                    if (o.意向主体) params.set('pf_signer', o.意向主体);
+                    // 意向金去向为「已转押金」时，自动传递意向金金额
+                    if (o.意向金去向 === '已转押金' && o['意向金金额(元)']) {
+                        params.set('pf_deposit', o['意向金金额(元)']);
+                    }
+                }
+                params.set('auto_open', '1');
+                window.location.href = '/admin/contracts?' + params.toString();
+            } else {
+                location.reload();
+            }
+        } else alert(res.error || '保存失败');
+    });
+}
+
+// 筛选
+function toggleChip(el, groupId) {
+    document.querySelectorAll('#' + groupId + ' .filter-chip').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    filterOpp();
+}
+
+function filterOpp() {
+    const project = document.querySelector('#filterProjects .filter-chip.active')?.dataset.val || '';
+    const stage = document.querySelector('#filterStages .filter-chip.active')?.dataset.val || '';
+    const result = document.querySelector('#filterResults .filter-chip.active')?.dataset.val || '';
+    const keyword = document.getElementById('filterKeyword').value.toLowerCase();
+
+    document.querySelectorAll('#oppTable tbody tr').forEach(tr => {
+        const mp = !project || tr.dataset.project === project;
+        const ms = !stage || tr.dataset.stage === stage;
+        const mr = !result || tr.dataset.result === result;
+        const mk = !keyword || tr.textContent.toLowerCase().includes(keyword);
+        tr.style.display = (mp && ms && mr && mk) ? '' : 'none';
+    });
+}
+
+function clearOppFilter() {
+    ['filterProjects','filterStages','filterResults'].forEach(g => {
+        document.querySelectorAll('#' + g + ' .filter-chip').forEach((c, i) => c.classList.toggle('active', i === 0));
+    });
+    document.getElementById('filterKeyword').value = '';
+    filterOpp();
+}
+
+// ===== 子公司用户：锁定项目相关控件 =====
+(function initProjectLock() {
+    if (!window._isSubcompany) return;
+    const proj = window._currentUserProject;
+    // 1. 筛选栏项目 chip：隐藏其他项目，锁定到所属项目
+    const allProjectChips = document.querySelectorAll('#filterProjects .filter-chip');
+    allProjectChips.forEach(c => {
+        if (c.dataset.val === proj) {
+            c.classList.add('active');
+        } else {
+            c.style.display = 'none';
+        }
+    });
+    // 隐藏"全部" chip
+    allProjectChips.forEach(c => {
+        if (c.dataset.val === '') c.style.display = 'none';
+    });
+    filterOpp();
+    // 2. 表单意向项目下拉框锁定 + 默认值
+    const formSel = document.getElementById('oppProject');
+    formSel.value = proj;
+    formSel.disabled = true;
+    formSel.style.background = '#f0f0f0';
+    formSel.style.cursor = 'default';
+})();
+</script>
+{% endblock %}

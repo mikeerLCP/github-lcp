@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+{% block title %}LCP商管 · 经营数据{% endblock %}
+{% block head %}
+<style>
+.biz-summary { display:flex; gap:12px; padding:12px 16px; background:#f0f7ff; border-radius:8px; margin-bottom:12px; flex-wrap:wrap; }
+.biz-summary .sum-item { font-size:13px; color:#555; }
+.biz-summary .sum-item strong { color:#2980b9; }
+.quick-dates { display:flex; gap:4px; }
+.quick-dates button { font-size:11px; padding:3px 8px; }
+th .check-all { margin:0; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">📈 经营数据</h1>
+    <div class="btn-group">
+        <button class="btn btn-primary" onclick="openModal('bizAddModal')">📝 补录数据</button>
+        <button class="btn btn-success btn-sm" onclick="exportCSV()">📥 导出CSV</button>
+        <button class="btn btn-outline btn-sm" onclick="location.reload()">🔄 刷新</button>
+    </div>
+</div>
+
+<!-- 筛选 + 汇总 -->
+<div class="filter-bar">
+    <span style="font-size:12px;color:#888;">日期：</span>
+    <input type="date" id="filterStart" onchange="filterBiz()">
+    <span> ~ </span>
+    <input type="date" id="filterEnd" onchange="filterBiz()">
+    <div class="quick-dates">
+        <button class="btn btn-sm btn-outline" onclick="setQuickDate('today')">今日</button>
+        <button class="btn btn-sm btn-outline" onclick="setQuickDate('week')">本周</button>
+        <button class="btn btn-sm btn-outline" onclick="setQuickDate('month')">本月</button>
+        <button class="btn btn-sm btn-outline" onclick="setQuickDate('7days')">近7天</button>
+        <button class="btn btn-sm btn-outline" onclick="setQuickDate('30days')">近30天</button>
+        <button class="btn btn-sm btn-outline" onclick="clearFilter()">全部</button>
+    </div>
+    <input type="text" id="filterKeyword" placeholder="搜索合同号/商户名..." oninput="filterBiz()" style="margin-left:8px;">
+    <button class="btn btn-sm btn-primary" onclick="filterBiz()">🔍 筛选</button>
+</div>
+
+<div class="biz-summary" id="bizSummary">
+    <span class="sum-item">共 <strong id="sumCount">0</strong> 条</span>
+    <span class="sum-item">| 营业额合计：<strong id="sumRevenue">¥0.00</strong></span>
+    <span class="sum-item">| 日均：<strong id="sumAvg">¥0.00</strong></span>
+    <span class="sum-item">| 客流合计：<strong id="sumFootfall">0</strong></span>
+    <span class="sum-item">| 成单：<strong id="sumDeals">0</strong></span>
+    <span class="sum-item">| 转化率：<strong id="sumConv">0%</strong></span>
+</div>
+
+<!-- 表格 + 批量操作 -->
+<form id="bizForm" method="POST" action="/admin/business/delete" onsubmit="return confirm('确定删除选中的记录？')">
+<div class="card" style="padding:12px;">
+    <div style="margin-bottom:8px;">
+        <button type="submit" class="btn btn-danger btn-sm">🗑 删除选中</button>
+        <span style="font-size:12px;color:#888;margin-left:8px;" id="selectedCount">已选 0 条</span>
+    </div>
+    <div class="table-wrapper">
+        <table id="bizTable" style="font-size:12px;">
+            <thead>
+                <tr>
+                    <th style="width:36px;"><input type="checkbox" class="check-all" onclick="toggleAll(this)"></th>
+                    <th>序号</th><th>日期</th><th>合同号</th><th>商户名称</th>
+                    <th>营业额</th><th>客流量</th><th>成交量</th>
+                    <th>业态</th><th>所属项目</th><th>录入时间</th><th>备注</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for b in biz_data %}
+                <tr>
+                    <td><input type="checkbox" name="ids" value="{{ b.合同号 }}||{{ b.日期 }}" class="row-check"></td>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ b.日期 }}</td>
+                    <td>{{ b.合同号 }}</td>
+                    <td>{{ b.商户名称 }}</td>
+                    <td class="text-right">¥{{ '{:,.2f}'.format(b.营业额) }}</td>
+                    <td class="text-center">{{ b.客流量 }}</td>
+                    <td class="text-center">{{ b.成交量 }}</td>
+                    <td>{{ b.业态 }}</td>
+                    <td>{{ b.所属项目 }}</td>
+                    <td>{{ b.录入时间[:16] if b.录入时间 else '' }}</td>
+                    <td>{{ b.备注[:15] }}{% if b.备注|length > 15 %}...{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+</form>
+
+<!-- 补录 Modal -->
+<div class="modal-overlay" id="bizAddModal">
+    <div class="modal-box" style="max-width:550px;">
+        <button class="modal-close" onclick="closeModal('bizAddModal')">✕</button>
+        <h3>📝 补录经营数据</h3>
+        <form method="POST" action="/admin/business/add" onsubmit="return validateBizForm()">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>搜索商户 *</label>
+                    <input type="text" id="bizSearchShop" placeholder="输入合同号或商户名称搜索..."
+                           oninput="searchShops()" autocomplete="off">
+                    <div id="shopSearchResults" style="max-height:120px;overflow-y:auto;border:1px solid #ddd;border-radius:4px;display:none;background:#fff;"></div>
+                    <input type="hidden" name="合同号" id="bizCno">
+                    <div id="bizShopInfo" style="font-size:11px;color:#888;margin-top:2px;"></div>
+                </div>
+                <div class="form-group"><label>日期 *</label><input type="date" name="日期" id="bizDate" required></div>
+                <div class="form-group"><label>营业额(元) *</label><input type="number" name="营业额" id="bizRevenue" step="0.01" required></div>
+                <div class="form-group"><label>客流量</label><input type="number" name="客流量" id="bizFootfall" step="1"></div>
+                <div class="form-group"><label>成交量</label><input type="number" name="成交量" id="bizDeals" step="1"></div>
+                <div class="form-group"><label>备注</label><input type="text" name="备注" id="bizRemark"></div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">保存</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal('bizAddModal')">取消</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+const allContracts = {{ (contracts_data | default([])) | tojson }};
+const bizData = {{ biz_data | tojson }};
+
+function openModal(id) {
+    document.getElementById(id).classList.add('show');
+    if (id === 'bizAddModal') {
+        document.getElementById('bizDate').value = new Date().toISOString().slice(0,10);
+    }
+}
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+// 商户搜索
+function searchShops() {
+    const kw = document.getElementById('bizSearchShop').value.trim().toLowerCase();
+    const results = document.getElementById('shopSearchResults');
+    if (!kw) { results.style.display = 'none'; return; }
+    // 用当前页面的合同数据搜索
+    fetch('/api/search-contracts?q=' + encodeURIComponent(kw))
+        .then(r => r.json())
+        .then(data => {
+            if (!data.length) { results.style.display = 'none'; return; }
+            results.style.display = 'block';
+            results.innerHTML = data.map(c =>
+                `<div style="padding:6px 8px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:12px;"
+                      onclick="selectShop('${c.合同号}','${c.商户名称}','${c.经营业态||''}')"
+                      onmouseover="this.style.background='#f0f7ff'" onmouseout="this.style.background=''">
+                    <strong>${c.合同号}</strong> - ${c.商户名称} (${c.经营业态||'未分类'})
+                </div>`
+            ).join('');
+        });
+}
+
+function selectShop(cno, name, bizType) {
+    document.getElementById('bizCno').value = cno;
+    document.getElementById('bizSearchShop').value = cno + ' - ' + name;
+    document.getElementById('bizShopInfo').textContent = '商户：' + name + ' | 业态：' + (bizType || '未分类');
+    document.getElementById('shopSearchResults').style.display = 'none';
+}
+
+function validateBizForm() {
+    const cno = document.getElementById('bizCno').value;
+    if (!cno) { alert('请搜索选择商户'); return false; }
+    const rev = document.getElementById('bizRevenue').value;
+    if (!rev || isNaN(parseFloat(rev))) { alert('请填写有效的营业额'); return false; }
+    return true;
+}
+
+// 导出
+function exportCSV() {
+    window.location.href = '/admin/business/export';
+}
+
+// 全选
+function toggleAll(cb) {
+    document.querySelectorAll('.row-check').forEach(c => c.checked = cb.checked);
+    updateSelectedCount();
+}
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('row-check')) updateSelectedCount();
+});
+function updateSelectedCount() {
+    const count = document.querySelectorAll('.row-check:checked').length;
+    document.getElementById('selectedCount').textContent = '已选 ' + count + ' 条';
+}
+
+// 快捷日期
+function setQuickDate(type) {
+    const now = new Date();
+    let start, end;
+    if (type === 'today') { start = end = now; }
+    else if (type === 'week') {
+        const day = now.getDay() || 7;
+        start = new Date(now); start.setDate(now.getDate() - day + 1);
+        end = now;
+    } else if (type === 'month') {
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        end = now;
+    } else if (type === '7days') {
+        start = new Date(now); start.setDate(now.getDate() - 6);
+        end = now;
+    } else if (type === '30days') {
+        start = new Date(now); start.setDate(now.getDate() - 29);
+        end = now;
+    }
+    document.getElementById('filterStart').value = start.toISOString().split('T')[0];
+    document.getElementById('filterEnd').value = end.toISOString().split('T')[0];
+    filterBiz();
+}
+
+function clearFilter() {
+    document.getElementById('filterStart').value = '';
+    document.getElementById('filterEnd').value = '';
+    document.getElementById('filterKeyword').value = '';
+    filterBiz();
+}
+
+// 筛选 + 汇总 + 图表
+function filterBiz() {
+    const start = document.getElementById('filterStart').value;
+    const end = document.getElementById('filterEnd').value;
+    const keyword = document.getElementById('filterKeyword').value.toLowerCase();
+    const rows = document.querySelectorAll('#bizTable tbody tr');
+
+    let count = 0, totalRev = 0, totalFoot = 0, totalDeals = 0;
+
+    rows.forEach(tr => {
+        const date = tr.cells[2].textContent.trim();
+        const md = !start || date >= start;
+        const me = !end || date <= end;
+        const mk = !keyword || tr.textContent.toLowerCase().includes(keyword);
+        const show = md && me && mk;
+        tr.style.display = show ? '' : 'none';
+
+        if (show) {
+            count++;
+            const rev = parseFloat(tr.cells[5].textContent.replace(/[^0-9.-]/g,'')) || 0;
+            const foot = parseInt(tr.cells[6].textContent) || 0;
+            const deals = parseInt(tr.cells[7].textContent) || 0;
+            totalRev += rev;
+            totalFoot += foot;
+            totalDeals += deals;
+        }
+    });
+
+    document.getElementById('sumCount').textContent = count;
+    document.getElementById('sumRevenue').textContent = '¥' + totalRev.toLocaleString(undefined, {minimumFractionDigits:2});
+    document.getElementById('sumAvg').textContent = count > 0 ? '¥' + (totalRev/count).toLocaleString(undefined, {minimumFractionDigits:2}) : '¥0.00';
+    document.getElementById('sumFootfall').textContent = totalFoot.toLocaleString();
+    document.getElementById('sumDeals').textContent = totalDeals.toLocaleString();
+    document.getElementById('sumConv').textContent = totalFoot > 0 ? (totalDeals/totalFoot*100).toFixed(1) + '%' : '0%';
+
+    updateSelectedCount();
+}
+
+// 页面加载后执行一次筛选
+document.addEventListener('DOMContentLoaded', function() { filterBiz(); });
+</script>
+{% endblock %}

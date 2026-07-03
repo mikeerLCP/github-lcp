@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>经营数据 — 丰盛云商商管 · 商户门户</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:#f5f7fa;color:#333;font-size:15px}
+  .topbar{background:#2980b9;color:#fff;padding:12px 20px;display:flex;align-items:center;justify-content:space-between}
+  .topbar h1{font-size:18px;font-weight:700}
+  .topbar a{color:#dce9f5;font-size:13px;text-decoration:none}
+  .nav{display:flex;background:#1a6699;overflow-x:auto}
+  .nav a{color:#c8dff0;padding:10px 20px;text-decoration:none;white-space:nowrap;font-size:14px}
+  .nav a.active,.nav a:hover{background:#2980b9;color:#fff}
+  .container{padding:16px;max-width:950px;margin:0 auto}
+  .card{background:#fff;border-radius:8px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+  .card h2{font-size:16px;color:#2980b9;margin-bottom:10px;border-bottom:1px solid #e8f0fa;padding-bottom:6px}
+  .stat-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+  .stat-box{flex:1 1 100px;min-width:100px;background:#fff;border-radius:8px;padding:10px 8px;box-shadow:0 1px 4px rgba(0,0,0,.08);text-align:center;overflow:hidden}
+  .stat-box .label{font-size:11px;color:#888;margin-bottom:4px;white-space:nowrap}
+  .stat-box .num{font-size:16px;font-weight:700;word-break:break-all}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{background:#e8f0fa;color:#2980b9;padding:8px 10px;text-align:left}
+  td{padding:8px 10px;border-bottom:1px solid #f0f0f0}
+  tr:last-child td{border:none}
+  form label{display:block;margin:10px 0 3px;font-size:14px;color:#555;font-weight:600}
+  form input,form textarea{width:100%;padding:9px 11px;border:1px solid #d0d8e4;border-radius:6px;font-size:14px;color:#333;margin-bottom:4px}
+  form textarea{min-height:80px;resize:vertical}
+  .btn{display:inline-block;padding:10px 24px;border:none;border-radius:6px;font-size:15px;font-weight:600;cursor:pointer;text-align:center;text-decoration:none}
+  .btn-primary{background:#2980b9;color:#fff}
+  .btn-primary:hover{background:#1a6699}
+  .btn-secondary{background:#ddd;color:#333}
+  .btn-small{font-size:13px;padding:7px 14px}
+  .tip{color:#e67e22;font-size:13px;margin:0 0 8px}
+  .flash{position:fixed;top:60px;right:20px;z-index:999;padding:10px 16px;border-radius:6px;font-size:14px;max-width:360px}
+  .flash-success{background:#e8f8f5;color:#1a7a4a;border:1px solid #b2dfdb}
+  .flash-danger{background:#fdf0f0;color:#c0392b;border:1px solid #f5c6cb}
+  .filter-bar{background:#fff;border-radius:8px;padding:10px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+  @media(max-width:600px){.stat-box{min-width:80px}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>丰盛云商商管 · 商户门户</h1>
+  <a href="{{ url_for('merchant_logout') }}">退出登录</a>
+</div>
+<div class="nav">
+  <a href="{{ url_for('merchant_dashboard') }}">我的主页</a>
+  <a href="{{ url_for('merchant_contract') }}">合同详情</a>
+  <a href="{{ url_for('merchant_rent') }}">租金情况</a>
+  <a href="{{ url_for('merchant_business') }}" class="active">经营数据</a>
+</div>
+<div class="container">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="flash flash-{{ cat }}">{{ msg }}</div>
+  {% endfor %}
+  {% endwith %}
+
+  <!-- 筛选栏 -->
+  <div class="filter-bar">
+    <form method="get" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="font-size:13px;color:#888;white-space:nowrap">时间范围：</span>
+      <input type="date" name="start_date" value="{{ start_date }}" style="width:auto;min-width:140px;padding:7px 10px;font-size:13px">
+      <span style="font-size:13px;color:#888">至</span>
+      <input type="date" name="end_date" value="{{ end_date }}" style="width:auto;min-width:140px;padding:7px 10px;font-size:13px">
+      <button class="btn btn-primary btn-small" type="submit">筛选</button>
+      {% if start_date or end_date %}
+      <a href="?" class="btn btn-secondary btn-small">清除</a>
+      {% endif %}
+    </form>
+  </div>
+
+  <!-- 操作按钮 + 记录数 -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <span style="font-size:14px;color:#888">
+      共 {{ records|length }} 条记录
+      {% if start_date or end_date %}
+      （{{ start_date or '最早' }} ~ {{ end_date or '最新' }}）
+      {% endif %}
+      （共 {{ all_records|length }} 条）
+    </span>
+    <button class="btn btn-primary btn-small" id="addBizBtn" onclick="showForm()">+ 录入数据</button>
+  </div>
+
+  <!-- 录入表单卡片 -->
+  <div class="card" id="inputCard" style="display:none">
+    <h2>录入经营数据</h2>
+    {% if existing_today %}
+    <div class="tip">今日已有录入数据，提交将覆盖原记录</div>
+    {% endif %}
+    <form method="post">
+      <label>日期</label>
+      <input type="date" name="biz_date" value="{{ today_str }}" max="{{ today_str }}" required>
+
+      <label>营业额（元）</label>
+      <input type="number" step="0.01" min="0" name="revenue" placeholder="请输入今日营业额" required>
+
+      <label>客流量（人次，选填）</label>
+      <input type="number" min="0" name="footfall" placeholder="今日到店客流人次">
+
+      <label>成交量（单，选填）</label>
+      <input type="number" min="0" name="deals" placeholder="今日成交订单数">
+
+      <label>备注（选填）</label>
+      <textarea name="remark" placeholder="促销活动、特殊情况等"></textarea>
+
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn btn-primary" type="submit">保 存</button>
+        <button class="btn btn-secondary" type="button" onclick="hideForm()">取消</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- 统计摘要 -->
+  <div class="stat-row">
+    <div class="stat-box">
+      <div class="label">累计天数</div>
+      <div class="num" style="color:#2980b9">{{ revenues_count }}</div>
+    </div>
+    <div class="stat-box">
+      <div class="label">累计营业额</div>
+      <div class="num" style="color:#27ae60">{{ "¥{:,.2f}".format(total_rev) }}</div>
+    </div>
+    <div class="stat-box">
+      <div class="label">日均营业额</div>
+      <div class="num" style="color:#8e44ad">{{ "¥{:,.2f}".format(avg_rev) }}</div>
+    </div>
+    <div class="stat-box">
+      <div class="label">单日最高</div>
+      <div class="num" style="color:#e67e22">{{ "¥{:,.2f}".format(max_rev) }}</div>
+    </div>
+    <div class="stat-box">
+      <div class="label">成单转化率</div>
+      <div class="num" style="color:#2c3e50">{{ conv_rate }}%</div>
+    </div>
+  </div>
+
+  <!-- 历史数据表 -->
+  <div class="card">
+    <h2>经营数据
+      {% if start_date or end_date %}
+      （{{ start_date or '最早' }} ~ {{ end_date or '最新' }}）
+      {% endif %}
+    </h2>
+    {% if records %}
+    <div style="overflow-x:auto">
+    <table>
+      <tr>
+        <th>日期</th><th>营业额</th><th>客流量</th><th>成交量</th>
+        <th>业态</th><th>录入时间</th><th>备注</th>
+      </tr>
+      {% for r in records %}
+      <tr>
+        <td>{{ r["日期"] }}</td>
+        <td>{{ "¥{:,.2f}".format(r["营业额"]) }}</td>
+        <td>{{ r["客流量"] if r["客流量"] != "" else "—" }}</td>
+        <td>{{ r["成交量"] if r["成交量"] != "" else "—" }}</td>
+        <td>{{ r.get("业态", "—") }}</td>
+        <td>{{ r.get("录入时间", "")[:10] }}</td>
+        <td>{{ r.get("备注", "") }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    </div>
+    {% else %}
+    <p style="color:#888;margin:10px 0">
+      暂无数据{% if start_date or end_date %}（可调整筛选范围）{% endif %}
+    </p>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+function showForm() {
+  document.getElementById('inputCard').style.display = 'block';
+  document.getElementById('addBizBtn').style.display = 'none';
+}
+function hideForm() {
+  document.getElementById('inputCard').style.display = 'none';
+  document.getElementById('addBizBtn').style.display = 'inline-block';
+}
+</script>
+</body>
+</html>

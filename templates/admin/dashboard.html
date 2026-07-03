@@ -1,0 +1,1073 @@
+{% extends "base.html" %}
+{% block title %}丰盛云商商管 · 仪表板{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+<style>
+/* ===== 仪表板专用样式 ===== */
+.dash-header {
+    background: #2980b9; color: #fff; padding: 12px 22px; border-radius: 10px 10px 0 0;
+    font-size: 17px; font-weight: 700; margin-bottom: 0;
+}
+/* 第一行：左4卡片 + 右饼图 */
+.dash-top-row {
+    display: flex; gap: 8px; margin-top: 16px; margin-bottom: 16px;
+}
+.dash-top-left { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.dash-top-right { flex: 1; min-width: 300px; max-width: 50%; display: flex; flex-direction: column; }
+
+/* 卡片通用 */
+.shop-info-card, .right-card, .biz-dist-card {
+    background: #fff; border: 1px solid #e8e8e8; border-radius: 8px; overflow: hidden;
+}
+.shop-info-header, .right-card-header {
+    font-size: 13px; font-weight: 600; color: #555; padding: 8px 12px;
+    background: #f8f9fa; border-bottom: 1px solid #e8e8e8;
+}
+.shop-info-body {
+    padding: 8px;
+}
+.shop-info-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+}
+.biz-dist-card {
+    flex: 1; display: flex; flex-direction: column;
+}
+.biz-dist-body {
+    flex: 1; padding: 10px; display: flex; align-items: center; justify-content: center;
+    position: relative; min-height: 0;
+}
+.biz-dist-body canvas { max-width: 100%; max-height: 100%; }
+.biz-dist-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 4px; flex-shrink: 0; }
+.biz-dist-table th { background: #f9fafb; padding: 5px 8px; text-align: center; font-size: 11px; color: #888; border-bottom: 2px solid #e8e8e8; }
+.biz-dist-table td { padding: 4px 8px; text-align: center; border-bottom: 1px solid #f0f0f0; }
+.biz-dist-table tr:last-child td { font-weight: 600; border-top: 2px solid #e8e8e8; background: #f9fafb; }
+
+.stat-mini {
+    text-align: center; padding: 10px 6px; border-radius: 6px;
+    background: #f8faff; border: 1px solid #eef2ff;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+}
+.stat-mini .stat-num { font-size: 22px; font-weight: 700; color: #2980b9; line-height: 1.2; }
+.stat-mini .stat-text { font-size: 11px; color: #888; margin-top: 2px; }
+.stat-mini.rent .stat-num { color: #2980b9; }
+.stat-mini.rent { background: #f0f7ff; }
+
+.right-card-body {
+    padding: 8px; display: grid; gap: 6px;
+}
+.stats-grid-1x4 { grid-template-columns: repeat(4, 1fr); }
+.stats-grid-1x2 { grid-template-columns: repeat(2, 1fr); }
+
+/* 租金总览 */
+.rent-section {
+    background: #fff; border: 1px solid #e8e8e8; border-radius: 8px; overflow: hidden;
+    margin-bottom: 16px;
+}
+.rent-section-header {
+    font-size: 13px; font-weight: 600; color: #555; padding: 8px 12px;
+    background: #f8f9fa; border-bottom: 1px solid #e8e8e8;
+}
+.rent-kpi-row {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 8px;
+}
+.rent-monthly-table {
+    width: 100%; border-collapse: collapse; font-size: 12px;
+}
+.rent-monthly-table th {
+    background: #f9fafb; padding: 6px 4px; text-align: center; font-size: 11px; color: #888;
+    border-bottom: 2px solid #e8e8e8; border-right: 1px solid #f0f0f0;
+}
+.rent-monthly-table td {
+    padding: 5px 4px; text-align: center; border-bottom: 1px solid #f0f0f0; border-right: 1px solid #f0f0f0;
+}
+.rent-monthly-table td:first-child, .rent-monthly-table th:first-child {
+    text-align: left; font-weight: 600; background: #f9fafb; border-right: 1px solid #e8e8e8;
+    white-space: nowrap; padding-left: 10px;
+}
+.rent-monthly-table td:last-child, .rent-monthly-table th:last-child {
+    border-right: none;
+}
+.rate-good { color: #27ae60; font-weight: 600; }
+.rate-warn { color: #e67e22; font-weight: 600; }
+.rate-bad { color: #c0392b; font-weight: 600; }
+
+/* 经营数据看板 */
+.biz-section { margin-top: 20px; }
+.biz-section .section-title {
+    font-size: 15px; font-weight: 600; padding: 10px 14px;
+    background: #fff; border: 1px solid #e8e8e8; border-radius: 8px 8px 0 0;
+    display: flex; justify-content: space-between; align-items: center;
+}
+.biz-filter-row {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.biz-filter-row select, .biz-filter-row input {
+    padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;
+}
+.biz-filter-row .btn { font-size: 12px; padding: 6px 12px; }
+
+.biz-kpi-row {
+    display: flex; gap: 6px; padding: 10px; background: #f0f2f5;
+    border-left: 1px solid #e8e8e8; border-right: 1px solid #e8e8e8;
+}
+.biz-kpi-card {
+    flex: 1; text-align: center; background: #fff; border-radius: 6px;
+    padding: 10px 4px; border: 1px solid #e8e8e8;
+}
+.biz-kpi-card .kpi-label { font-size: 11px; color: #999; }
+.biz-kpi-card .kpi-value { font-size: 18px; font-weight: 700; margin-top: 2px; }
+.biz-kpi-card .kpi-sub { font-size: 10px; color: #aaa; margin-top: 2px; }
+
+.biz-content-row {
+    display: flex; gap: 8px; padding: 0;
+    border-left: 1px solid #e8e8e8; border-right: 1px solid #e8e8e8;
+    background: #f0f2f5;
+}
+.biz-content-row > .biz-left {
+    flex: 2; display: flex; flex-direction: column; gap: 8px;
+}
+.biz-content-row > .biz-right {
+    flex: 3; display: flex; flex-direction: column; gap: 8px;
+}
+.biz-panel {
+    background: #fff; border: 1px solid #e8e8e8; border-radius: 6px;
+    padding: 10px; min-height: 200px;
+    overflow: hidden; /* 防止 Chart.js responsive resize 死循环 */
+}
+.biz-panel h4 { font-size: 13px; color: #555; margin-bottom: 8px; }
+.chart-wrap {
+    position: relative; width: 100%; max-width: 100%;
+}
+
+.biz-bottom-row {
+    display: flex; gap: 8px; padding: 0;
+    border-left: 1px solid #e8e8e8; border-right: 1px solid #e8e8e8;
+    background: #f0f2f5;
+}
+.biz-bottom-row > .biz-left {
+    flex: 2;
+}
+.biz-bottom-row > .biz-right {
+    flex: 3;
+}
+
+.biz-table-section {
+    background: #fff; border: 1px solid #e8e8e8; border-radius: 0 0 8px 8px;
+    padding: 10px;
+}
+.biz-table-section h4 { font-size: 13px; color: #555; margin-bottom: 6px; }
+
+.top10-tabs { display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
+.top10-tab {
+    padding: 4px 10px; font-size: 11px; border: 1px solid #ddd; border-radius: 14px;
+    cursor: pointer; background: #fff; color: #666; transition: all 0.15s;
+}
+.top10-tab.active { background: #4361ee; color: #fff; border-color: #4361ee; }
+
+.rank-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+.rank-table th { background: #f9fafb; padding: 6px 8px; text-align: left; font-size: 11px; color: #888; border-bottom: 2px solid #e8e8e8; }
+.rank-table td { padding: 5px 8px; border-bottom: 1px solid #f0f0f0; }
+.rank-table .rank-num { width: 24px; height: 24px; line-height: 24px; text-align: center; border-radius: 50%; font-weight: 700; font-size: 12px; display: inline-block; }
+.rank-num-1 { background: #ff6b6b; color: #fff; }
+.rank-num-2 { background: #ffa502; color: #fff; }
+.rank-num-3 { background: #ffd43b; color: #fff; }
+
+.shop-detail { width: 100%; font-size: 12px; border-collapse: collapse; }
+.shop-detail th { background: #f9fafb; padding: 7px 8px; text-align: center; font-size: 11px; color: #888; border-bottom: 2px solid #e8e8e8; }
+.shop-detail td { padding: 6px 8px; text-align: center; border-bottom: 1px solid #f0f0f0; }
+.shop-detail td:first-child { text-align: left; }
+
+.empty-tip { color: #aaa; font-size: 13px; text-align: center; padding: 30px; }
+
+.mom-up { color: #c0392b; }
+.mom-down { color: #27ae60; }
+
+@media (max-width: 1200px) {
+    .dash-top-row { flex-direction: column; }
+    .dash-top-right { max-width: none; min-width: 0; }
+    .biz-dist-body { min-height: 250px; }
+    .shop-info-body { flex-direction: column; }
+    .biz-content-row, .biz-bottom-row { flex-direction: column; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ===== 欢迎标题 ===== -->
+<div class="dash-header">🏠  欢迎使用丰盛云商商管系统</div>
+
+<!-- ===== 第一行：左侧4卡片 | 右侧饼图 ===== -->
+<div class="dash-top-row">
+
+    <!-- 左：商铺信息 → 商机概况 → 合同状态 → 租金总览 -->
+    <div class="dash-top-left">
+        <div class="shop-info-card">
+            <div class="shop-info-header">🏪 商铺信息</div>
+            <div class="shop-info-body">
+                <div class="shop-info-grid">
+                    <div class="stat-mini">
+                        <div class="stat-num">{{ stats.total_shops }}</div>
+                        <div class="stat-text">商铺总数</div>
+                    </div>
+                    <div class="stat-mini">
+                        <div class="stat-num">{{ stats.rented }}</div>
+                        <div class="stat-text">已出租</div>
+                    </div>
+                    <div class="stat-mini">
+                        <div class="stat-num">{{ stats.vacant }}</div>
+                        <div class="stat-text">空置</div>
+                    </div>
+                    <div class="stat-mini">
+                        <div class="stat-num">{{ stats.repair }}</div>
+                        <div class="stat-text">维修</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="right-card">
+            <div class="right-card-header">🎯 商机概况</div>
+            <div class="right-card-body stats-grid-1x4">
+                <div class="stat-mini">
+                    <div class="stat-num">{{ stats.total_opps }}</div>
+                    <div class="stat-text">商机总数</div>
+                </div>
+                <div class="stat-mini">
+                    <div class="stat-num">{{ stats.following_opps }}</div>
+                    <div class="stat-text">履约中</div>
+                </div>
+                <div class="stat-mini">
+                    <div class="stat-num">{{ stats.paid_opps }}</div>
+                    <div class="stat-text">已交付意金</div>
+                </div>
+                <div class="stat-mini">
+                    <div class="stat-num">{{ stats.lost_opps }}</div>
+                    <div class="stat-text">已流失</div>
+                </div>
+            </div>
+        </div>
+        <div class="right-card">
+            <div class="right-card-header">📋 合同状态</div>
+            <div class="right-card-body stats-grid-1x4">
+                <div class="stat-mini">
+                    <div class="stat-num">{{ stats.total_contracts }}</div>
+                    <div class="stat-text">合同总数</div>
+                </div>
+                <div class="stat-mini">
+                    <div class="stat-num">{{ stats.active_ct }}</div>
+                    <div class="stat-text">履约中</div>
+                </div>
+                <div class="stat-mini">
+                    <div class="stat-num">{{ stats.expired_ct }}</div>
+                    <div class="stat-text">已到期</div>
+                </div>
+                <div class="stat-mini">
+                    <div class="stat-num">{{ stats.terminated_ct }}</div>
+                    <div class="stat-text">已终止</div>
+                </div>
+            </div>
+        </div>
+        <div class="right-card">
+            <div class="right-card-header">💰 租金总览</div>
+            <div class="right-card-body stats-grid-1x2">
+                <div class="stat-mini rent">
+                    <div class="stat-num">
+                        {% if stats.sum_rent >= 10000 %}¥{{ "%.1f"|format(stats.sum_rent/10000) }}万
+                        {% else %}¥{{ "%.0f"|format(stats.sum_rent) }}{% endif %}
+                    </div>
+                    <div class="stat-text">已签订租金总额</div>
+                </div>
+                <div class="stat-mini rent">
+                    <div class="stat-num">
+                        {% if stats.sum_due >= 10000 %}¥{{ "%.1f"|format(stats.sum_due/10000) }}万
+                        {% else %}¥{{ "%.0f"|format(stats.sum_due) }}{% endif %}
+                    </div>
+                    <div class="stat-text">到期应收租金总额</div>
+                </div>
+                <div class="stat-mini rent">
+                    <div class="stat-num">
+                        {% if stats.sum_paid >= 10000 %}¥{{ "%.1f"|format(stats.sum_paid/10000) }}万
+                        {% else %}¥{{ "%.0f"|format(stats.sum_paid) }}{% endif %}
+                    </div>
+                    <div class="stat-text">已收租金总额</div>
+                </div>
+                <div class="stat-mini rent">
+                    <div class="stat-num">{{ "%.1f"|format(stats.collection_rate) }}%</div>
+                    <div class="stat-text">租金收缴率</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右：在营业态分布饼图（撑满左侧4卡片总高度） -->
+    <div class="dash-top-right">
+        <div class="biz-dist-card">
+            <div class="shop-info-header">📊 在营业态分布</div>
+            <div class="biz-dist-body">
+                <canvas id="bizDistPie"></canvas>
+            </div>
+            <div style="padding: 0 10px 10px 10px;">
+                <table class="biz-dist-table">
+                    <thead>
+                        <tr><th>在营业态</th><th>数量</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for fmt, cnt in stats.biz_dist.items() %}
+                        <tr><td>{{ fmt }}</td><td>{{ cnt }}</td></tr>
+                        {% endfor %}
+                        <tr><td>合计</td><td>{{ stats.biz_dist.values() | sum }}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== 第二行：租金总览（KPI卡片 + 月度表格） ===== -->
+<div class="rent-section">
+    <div class="rent-section-header">📊 <span id="monthlyRentYear"></span>年每月租金情况</div>
+    <!-- 月度租金表格 -->
+    <div style="padding: 8px; overflow-x: auto;">
+        <table class="rent-monthly-table">
+            <thead>
+                <tr>
+                    <th></th>
+                    {% for m in range(1, 13) %}
+                    <th>{{ m }}月</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>应收租金</td>
+                    {% for m in range(1, 13) %}
+                    {% set d = stats.monthly_rent.get(m|string, {}) %}
+                    <td>{% if d.get('应收', 0) > 0 %}{% if d['应收'] >= 10000 %}{{ "%.1f"|format(d['应收']/10000) }}万{% else %}{{ "%.0f"|format(d['应收']) }}{% endif %}{% else %}—{% endif %}</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <td>已收租金</td>
+                    {% for m in range(1, 13) %}
+                    {% set d = stats.monthly_rent.get(m|string, {}) %}
+                    <td>{% if d.get('已收', 0) > 0 %}{% if d['已收'] >= 10000 %}{{ "%.1f"|format(d['已收']/10000) }}万{% else %}{{ "%.0f"|format(d['已收']) }}{% endif %}{% else %}—{% endif %}</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <td>租金收缴率</td>
+                    {% for m in range(1, 13) %}
+                    {% set d = stats.monthly_rent.get(m|string, {}) %}
+                    {% set r = d.get('收缴率', 0) %}
+                    <td>{% if d.get('应收', 0) > 0 %}<span class="{% if r >= 95 %}rate-good{% elif r >= 80 %}rate-warn{% else %}rate-bad{% endif %}">{{ "%.1f"|format(r) }}%</span>{% else %}—{% endif %}</td>
+                    {% endfor %}
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+
+<!-- ===== 每日经营情况 ===== -->
+<div class="biz-section" id="bizSection">
+    <div class="section-title">
+        <span id="bizTitle">📊  每日经营情况</span>
+        <div class="biz-filter-row">
+            <span style="font-size:12px;color:#888;">日期：</span>
+            <input type="date" id="bizDate" onchange="refreshBizDashboard()" style="width:140px;">
+            <span style="font-size:12px;color:#888;">项目：</span>
+            <select id="bizProject" onchange="refreshBizDashboard()">
+                <option value="全部">所有项目</option>
+                {% for p in biz_data.all_projects %}
+                <option value="{{ p }}">{{ p }}</option>
+                {% endfor %}
+            </select>
+            <button class="btn btn-sm btn-primary" onclick="refreshBizDashboard()">🔍 刷新</button>
+        </div>
+    </div>
+
+    <!-- KPI 卡片（对齐原型：进店客流/销售额/日环比/同比上周/本周累计/本月累计） -->
+    <div class="biz-kpi-row" id="bizKpiRow">
+        <div class="biz-kpi-card"><div class="kpi-label">进店客流</div><div class="kpi-value" style="color:#2980b9;">--</div><div class="kpi-sub"></div></div>
+        <div class="biz-kpi-card"><div class="kpi-label">销售额</div><div class="kpi-value" style="color:#2980b9;">--</div><div class="kpi-sub"></div></div>
+        <div class="biz-kpi-card"><div class="kpi-label">日环比</div><div class="kpi-value">--</div><div class="kpi-sub"></div></div>
+        <div class="biz-kpi-card"><div class="kpi-label">日同比上周</div><div class="kpi-value">--</div><div class="kpi-sub"></div></div>
+        <div class="biz-kpi-card"><div class="kpi-label">本周累计</div><div class="kpi-value" style="color:#2980b9;">--</div><div class="kpi-sub"></div></div>
+        <div class="biz-kpi-card"><div class="kpi-label">本月累计</div><div class="kpi-value" style="color:#2980b9;">--</div><div class="kpi-sub"></div></div>
+    </div>
+
+    <!-- 主内容行：TOP10（左）+ 周趋势图（右） -->
+    <div class="biz-content-row" style="padding: 0 8px 8px 8px;">
+        <div class="biz-left">
+            <div class="biz-panel" id="top10Panel">
+                <h4>🏆 TOP10 排行</h4>
+                <div class="top10-tabs" id="top10Tabs">
+                    <span class="top10-tab active" data-metric="销售额" onclick="switchTop10('销售额')">销售额</span>
+                    <span class="top10-tab" data-metric="进店客流" onclick="switchTop10('进店客流')">进店客流</span>
+                    <span class="top10-tab" data-metric="日坪效" onclick="switchTop10('日坪效')">日坪效</span>
+                    <span class="top10-tab" data-metric="转化率" onclick="switchTop10('转化率')">转化率</span>
+                </div>
+                <div id="top10Content"><div class="empty-tip">请在下方选择日期查看</div></div>
+            </div>
+        </div>
+        <div class="biz-right">
+            <div class="biz-panel" style="min-height:260px;">
+                <h4>📈 近7天销售额趋势</h4>
+                <div class="chart-wrap" style="height:220px;">
+                    <canvas id="weekLineChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 第二行：业态柱状图（左）+ 业态排名（右） -->
+    <div class="biz-bottom-row" style="padding: 0 8px 8px 8px;">
+        <div class="biz-left">
+            <div class="biz-panel" style="min-height:200px;">
+                <h4>📊 业态销售占比</h4>
+                <div class="chart-wrap" style="height:170px;">
+                    <canvas id="formatBarChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="biz-right">
+            <div class="biz-panel" id="formatRankPanel">
+                <h4>📋 业态排名</h4>
+                <div id="formatRankContent"><div class="empty-tip">请在下方选择日期查看</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 商户明细表 -->
+    <div class="biz-table-section">
+        <h4>📋 商户明细</h4>
+        <div style="overflow-x:auto;">
+            <table class="shop-detail" id="shopDetailTable">
+                <thead>
+                    <tr>
+                        <th>商户</th><th>业态</th><th>销售额</th><th>成单</th>
+                        <th>客单价</th><th>转化率</th><th>日坪效</th><th>日环比</th><th>日同比上周</th>
+                    </tr>
+                </thead>
+                <tbody id="shopDetailBody">
+                    <tr><td colspan="9" class="empty-tip">请在下方选择日期查看</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 初始化日期选择器为最新日期
+const allDates = {{ biz_data.all_dates | tojson }};
+const bizRecordsRaw = {{ biz_data.records | tojson }};
+let currentTop10Metric = '销售额';
+let weekChart = null;
+let formatChart = null;
+let bizDistPieChart = null;
+
+// ── 业态分布饼图（商铺信息区） ──
+const bizDistData = {{ stats.biz_dist | tojson }};
+function initBizDistPie() {
+    const labels = Object.keys(bizDistData);
+    const values = Object.values(bizDistData);
+    if (!labels.length) {
+        document.getElementById('bizDistPie').parentElement.innerHTML = '<div style="color:#aaa;font-size:12px;text-align:center;">暂无数据</div>';
+        return;
+    }
+    const colors = ['#2980b9','#27ae60','#e67e22','#8e44ad','#c0392b','#16a085','#2c3e50','#f39c12','#1abc9c','#d35400'];
+    const ctx = document.getElementById('bizDistPie').getContext('2d');
+    bizDistPieChart = new Chart(ctx, {
+        type: 'pie',
+        plugins: [ChartDataLabels],
+        data: {
+            labels: labels,
+            datasets: [{
+                data: values,
+                backgroundColor: colors.slice(0, labels.length),
+                borderWidth: 2,
+                borderColor: '#fff',
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: {
+                legend: { display: false },
+                datalabels: {
+                    formatter: function(value, ctx) {
+                        const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                        const pct = total > 0 ? (value / total * 100) : 0;
+                        if (pct < 5) return '';
+                        return ctx.chart.data.labels[ctx.dataIndex] + '\n' + pct.toFixed(1) + '%';
+                    },
+                    color: '#fff',
+                    font: { size: 16, weight: 'bold' },
+                    textAlign: 'center',
+                    textStrokeColor: 'rgba(0,0,0,0.3)',
+                    textStrokeWidth: 1,
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(ctx) {
+                            const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                            const pct = total > 0 ? (ctx.raw / total * 100).toFixed(1) : '0.0';
+                            return ctx.label + ': ' + ctx.raw + '家 (' + pct + '%)';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+    function toLocalDateStr(d) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    }
+
+document.addEventListener('DOMContentLoaded', function() {
+    initBizDistPie();
+    document.getElementById('monthlyRentYear').textContent = new Date().getFullYear();
+    if (allDates.length > 0) {
+        document.getElementById('bizDate').value = allDates[0];
+    }
+    // 子公司用户：锁定项目筛选器
+    if (window._isSubcompany) {
+        const sel = document.getElementById('bizProject');
+        sel.value = window._currentUserProject;
+        sel.disabled = true;
+        sel.style.background = '#f0f0f0';
+        sel.style.cursor = 'default';
+    }
+    refreshBizDashboard();
+});
+
+function refreshBizDashboard() {
+    const dateStr = document.getElementById('bizDate').value;
+    const project = document.getElementById('bizProject').value;
+
+    fetch(`/api/biz-dashboard?date=${encodeURIComponent(dateStr)}&project=${encodeURIComponent(project)}`)
+        .then(r => {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
+        .then(data => {
+            renderAllBiz(data);
+        })
+        .catch(err => console.error('biz-dashboard error:', err));
+}
+
+function renderAllBiz(data) {
+    const records = data.records;
+    window._bizAllRecords = records;  // 缓存全量数据，供商铺明细计算日环比/同比上周
+    const dateStr = document.getElementById('bizDate').value;
+    // 更新标题
+    const dayNames = ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'];
+    let titleStr = '📊  每日经营情况';
+    if (dateStr) {
+        const d = new Date(dateStr + 'T00:00:00');
+        titleStr = `📊  每日经营情况（${dateStr} ${dayNames[d.getDay()]}）`;
+    }
+    const project = document.getElementById('bizProject').value;
+    if (project && project !== '全部') titleStr += ` - ${project}`;
+    document.getElementById('bizTitle').textContent = titleStr;
+
+    // ── KPI ──
+    const latestRecords = records.filter(r => r.日期 === dateStr);
+    const totalFootfall = latestRecords.reduce((s, r) => s + (r.客流量 || 0), 0);
+    const totalSales = latestRecords.reduce((s, r) => s + (r.营业额 || 0), 0);
+    const totalDeals = latestRecords.reduce((s, r) => s + (r.成交量 || 0), 0);
+    const convRate = totalFootfall > 0 ? (totalDeals / totalFootfall * 100).toFixed(1) : '0.0';
+
+    // 去重算面积
+    const seen = new Set();
+    let totalArea = 0;
+    latestRecords.forEach(r => {
+        if (!seen.has(r.商户名称)) {
+            seen.add(r.商户名称);
+            totalArea += r.面积 || 0;
+        }
+    });
+    const px = totalArea > 0 ? (totalSales / totalArea).toFixed(2) : '0.00';
+
+    // 前一天 + 上周同日
+    const curDate = new Date(dateStr + 'T00:00:00');
+    const prevDate = new Date(curDate); prevDate.setDate(prevDate.getDate() - 1);
+    const lastWkDate = new Date(curDate); lastWkDate.setDate(lastWkDate.getDate() - 7);
+    const prevStr = toLocalDateStr(prevDate);
+    const lastWkStr = toLocalDateStr(lastWkDate);
+
+    const prevRecords = records.filter(r => r.日期 === prevStr);
+    const lastWkRecords = records.filter(r => r.日期 === lastWkStr);
+    const prevSales = prevRecords.reduce((s, r) => s + (r.营业额 || 0), 0);
+    const lastWkSales = lastWkRecords.reduce((s, r) => s + (r.营业额 || 0), 0);
+
+    const momVal = prevSales > 0 ? ((totalSales - prevSales) / prevSales * 100) : null;
+    const wowVal = lastWkSales > 0 ? ((totalSales - lastWkSales) / lastWkSales * 100) : null;
+
+    // 本周累计（选中日期所在周的周一～周日，周日getDay()=0需特殊处理）
+    const monday = new Date(curDate);
+    const dow = monday.getDay();
+    monday.setDate(monday.getDate() - (dow === 0 ? 6 : dow - 1));
+    const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+    const mondayStr = toLocalDateStr(monday);
+    const sundayStr = toLocalDateStr(sunday);
+    const thisWeekTotal = records.filter(r => r.日期 >= mondayStr && r.日期 <= sundayStr)
+        .reduce((s, r) => s + (r.营业额 || 0), 0);
+
+    // 本月累计（选中日期所在月的1号～月末）
+    const monthStart = dateStr.slice(0,7) + '-01';
+    const monthEnd = toLocalDateStr(new Date(curDate.getFullYear(), curDate.getMonth() + 1, 0));
+    const thisMonthTotal = records.filter(r => r.日期 >= monthStart && r.日期 <= monthEnd)
+        .reduce((s, r) => s + (r.营业额 || 0), 0);
+
+    // 更新 KPI 卡片（对齐原型 2×3 布局：进店客流/销售额/日环比/同比上周/本周累计/本月累计）
+    const kpiCards = document.querySelectorAll('#bizKpiRow .biz-kpi-card');
+    const fmtNum = v => v >= 10000 ? (v/10000).toFixed(1) + '万' : v.toLocaleString();
+    const fmtMoney = v => v >= 10000 ? '¥' + (v/10000).toFixed(1) + '万' : '¥' + v.toLocaleString(undefined, {minimumFractionDigits:0,maximumFractionDigits:0});
+
+    // [0] 进店客流
+    kpiCards[0].querySelector('.kpi-value').textContent = totalFootfall.toLocaleString() + ' 人次';
+    // [1] 销售额
+    kpiCards[1].querySelector('.kpi-value').textContent = fmtMoney(totalSales);
+    // [2] 日环比
+    const momEl = kpiCards[2].querySelector('.kpi-value');
+    if (momVal === null || momVal === 0) {
+        momEl.textContent = '—';
+        momEl.className = 'kpi-value';
+        momEl.style.color = '#2980b9';
+    } else {
+        momEl.textContent = (momVal >= 0 ? '+' : '') + momVal.toFixed(1) + '%';
+        momEl.className = 'kpi-value';
+        momEl.style.color = momVal > 0 ? '#c0392b' : '#27ae60';
+    }
+    // [3] 同比上周
+    const wowEl = kpiCards[3].querySelector('.kpi-value');
+    if (wowVal === null || wowVal === 0) {
+        wowEl.textContent = '—';
+        wowEl.className = 'kpi-value';
+        wowEl.style.color = '#2980b9';
+    } else {
+        wowEl.textContent = (wowVal >= 0 ? '+' : '') + wowVal.toFixed(1) + '%';
+        wowEl.className = 'kpi-value';
+        wowEl.style.color = wowVal > 0 ? '#c0392b' : '#27ae60';
+    }
+    // [4] 本周累计
+    kpiCards[4].querySelector('.kpi-value').textContent = fmtMoney(thisWeekTotal);
+    // [5] 本月累计
+    kpiCards[5].querySelector('.kpi-value').textContent = fmtMoney(thisMonthTotal);
+
+    // ── TOP10 ──
+    renderTop10(records, currentTop10Metric);
+
+    // ── 周趋势图 ──
+    renderWeekChart(records);
+
+    // ── 业态柱状图 ──
+    renderFormatBar(records, dateStr);
+
+    // ── 业态排名 ──
+    renderFormatRank(records, dateStr);
+
+    // ── 商铺明细 ──
+    renderShopDetail(latestRecords);
+}
+
+// ===== TOP10 =====
+function switchTop10(metric) {
+    currentTop10Metric = metric;
+    document.querySelectorAll('#top10Tabs .top10-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.metric === metric);
+    });
+    // 直接拿当前渲染的数据
+    const dateStr = document.getElementById('bizDate').value;
+    const project = document.getElementById('bizProject').value;
+    fetch(`/api/biz-dashboard?date=${encodeURIComponent(dateStr)}&project=${encodeURIComponent(project)}`)
+        .then(r => r.json())
+        .then(data => renderTop10(data.records, metric));
+}
+
+function renderTop10(records, metric) {
+    const dateStr = document.getElementById('bizDate').value;
+    const latestRecords = records.filter(r => r.日期 === dateStr);
+
+    if (!latestRecords.length) {
+        document.getElementById('top10Content').innerHTML = '<div class="empty-tip">暂无数据</div>';
+        return;
+    }
+
+    // 按商户汇总
+    const shopAgg = {};
+    latestRecords.forEach(r => {
+        const key = r.商户名称;
+        if (!shopAgg[key]) shopAgg[key] = { name: key, 业态: r.业态 || '', 营业额: 0, 客流量: 0, 成交量: 0, 面积: r.面积 || 0 };
+        shopAgg[key].营业额 += r.营业额 || 0;
+        shopAgg[key].客流量 += r.客流量 || 0;
+        shopAgg[key].成交量 += r.成交量 || 0;
+    });
+
+    let sorted;
+    if (metric === '日坪效') {
+        sorted = Object.values(shopAgg).map(m => {
+            const px = m.面积 > 0 ? m.营业额 / m.面积 : 0;
+            return { 商户名称: m.name, 业态: m.业态, 值: px, 格式化: '¥' + px.toFixed(2) + '/㎡·天' };
+        }).sort((a, b) => b.值 - a.值).slice(0, 10);
+    } else if (metric === '转化率') {
+        sorted = Object.values(shopAgg).map(m => {
+            const conv = m.客流量 > 0 ? m.成交量 / m.客流量 * 100 : 0;
+            return { 商户名称: m.name, 业态: m.业态, 值: conv, 格式化: conv.toFixed(1) + '%' };
+        }).sort((a, b) => b.值 - a.值).slice(0, 10);
+    } else if (metric === '进店客流') {
+        sorted = Object.values(shopAgg).map(m => ({
+            商户名称: m.name, 业态: m.业态, 值: m.客流量, 格式化: m.客流量.toLocaleString() + ' 人次'
+        })).sort((a, b) => b.值 - a.值).slice(0, 10);
+    } else {
+        // 销售额（默认）
+        sorted = Object.values(shopAgg).map(m => ({
+            商户名称: m.name, 业态: m.业态, 值: m.营业额, 格式化: '¥' + m.营业额.toLocaleString()
+        })).sort((a, b) => b.值 - a.值).slice(0, 10);
+    }
+
+    const rankColors = ['rank-num-1', 'rank-num-2', 'rank-num-3'];
+    let html = '<table class="rank-table"><thead><tr><th>#</th><th>商铺</th><th>业态</th><th>' + metric + '</th></tr></thead><tbody>';
+    sorted.forEach((item, i) => {
+        const cls = i < 3 ? rankColors[i] : '';
+        html += `<tr><td><span class="rank-num ${cls}">${i+1}</span></td><td>${item.商户名称}</td><td>${item.业态}</td><td>${item.格式化}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById('top10Content').innerHTML = html;
+}
+
+// ===== 周趋势图（本周 vs 上周，纯销售额双折线，对齐原型） =====
+function renderWeekChart(records) {
+    const curDate = new Date(document.getElementById('bizDate').value + 'T00:00:00');
+
+    // 以选定日期所在自然周（周一~周日）为基准
+    const dayOfWeek = curDate.getDay(); // 0=周日,1=周一...
+    const diffToMonday = (dayOfWeek === 0) ? -6 : 1 - dayOfWeek;
+    const thisMonday = new Date(curDate);
+    thisMonday.setDate(curDate.getDate() + diffToMonday);
+
+    const weekLabels = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日'];
+    const thisWeekVals = [];
+    const lastWeekVals = [];
+
+    // 按日汇总所有记录的销售额
+    const dailySales = {};
+    records.forEach(r => {
+        if (r.日期) {
+            if (!dailySales[r.日期]) dailySales[r.日期] = 0;
+            dailySales[r.日期] += r.营业额 || 0;
+        }
+    });
+
+    for (let i = 0; i < 7; i++) {
+        const thisDay = new Date(thisMonday); thisDay.setDate(thisMonday.getDate() + i);
+        const lastDay = new Date(thisMonday); lastDay.setDate(thisMonday.getDate() + i - 7);
+        const thisDayStr = toLocalDateStr(thisDay);
+        const lastDayStr = toLocalDateStr(lastDay);
+        const tv = dailySales[thisDayStr] || 0;
+        const lv = dailySales[lastDayStr] || 0;
+        thisWeekVals.push(tv > 0 ? tv : null);
+        lastWeekVals.push(lv > 0 ? lv : null);
+    }
+
+    const ctx = document.getElementById('weekLineChart').getContext('2d');
+    if (weekChart) weekChart.destroy();
+
+    weekChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: weekLabels,
+            datasets: [
+                {
+                    label: '本周',
+                    data: thisWeekVals,
+                    borderColor: '#2980b9',
+                    backgroundColor: 'rgba(41,128,185,0.08)',
+                    borderWidth: 2.5,
+                    pointRadius: 5,
+                    pointBackgroundColor: '#2980b9',
+                    tension: 0.3,
+                    spanGaps: false,
+                },
+                {
+                    label: '上周',
+                    data: lastWeekVals,
+                    borderColor: '#95a5a6',
+                    backgroundColor: 'transparent',
+                    borderWidth: 1.8,
+                    borderDash: [5, 3],
+                    pointRadius: 4,
+                    pointBackgroundColor: '#95a5a6',
+                    pointStyle: 'rect',
+                    tension: 0.3,
+                    spanGaps: false,
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(ctx) {
+                            const v = ctx.raw;
+                            if (v === null || v === undefined) return ctx.dataset.label + ': 无数据';
+                            return ctx.dataset.label + ': ' + (v >= 10000 ? '¥' + (v/10000).toFixed(1) + '万' : '¥' + v.toLocaleString());
+                        }
+                    }
+                },
+                legend: { display: true, position: 'top', labels: { usePointStyle: true, padding: 15 } }
+            },
+            scales: {
+                y: {
+                    title: { display: true, text: '销售额(元)', color: '#333' },
+                    ticks: { callback: v => v >= 10000 ? (v/10000).toFixed(1) + '万' : v },
+                    beginAtZero: true
+                }
+            }
+        },
+        plugins: [{
+            // 数据标签：本周在上方，上周在下方（对齐原型 annotate）
+            id: 'weekLineLabels',
+            afterDatasetsDraw(chart) {
+                const ctx2 = chart.ctx;
+                ctx2.font = '10px "Microsoft YaHei", sans-serif';
+                ctx2.textAlign = 'center';
+                chart.data.datasets.forEach((ds, dsIdx) => {
+                    const meta = chart.getDatasetMeta(dsIdx);
+                    meta.data.forEach((pt, i) => {
+                        const v = ds.data[i];
+                        if (v === null || v === undefined) return;
+                        const label = v >= 10000 ? (v/10000).toFixed(0) + '万' : v.toLocaleString();
+                        if (dsIdx === 0) {
+                            // 本周 — 上方
+                            ctx2.fillStyle = '#2980b9';
+                            ctx2.textBaseline = 'bottom';
+                            ctx2.fillText('¥' + label, pt.x, pt.y - 6);
+                        } else {
+                            // 上周 — 下方
+                            ctx2.fillStyle = '#95a5a6';
+                            ctx2.textBaseline = 'top';
+                            ctx2.fillText('¥' + label, pt.x, pt.y + 6);
+                        }
+                    });
+                });
+            }
+        }]
+    });
+}
+
+// ===== 业态销售占比（水平条形图，对齐原型 barh 样式） =====
+function renderFormatBar(records, dateStr) {
+    const latestRecords = records.filter(r => r.日期 === dateStr);
+    const formatGroup = {};
+    latestRecords.forEach(r => {
+        const fmt = r.业态 || '未知';
+        if (!formatGroup[fmt]) formatGroup[fmt] = 0;
+        formatGroup[fmt] += r.营业额 || 0;
+    });
+    const sorted = Object.entries(formatGroup).sort((a, b) => b[1] - a[1]);
+    const total = sorted.reduce((s, [, v]) => s + v, 0);
+
+    const ctx = document.getElementById('formatBarChart').getContext('2d');
+    if (formatChart) formatChart.destroy();
+
+    const colors = ['#2980b9','#27ae60','#e67e22','#8e44ad','#c0392b','#16a085','#2c3e50','#f39c12'];
+    const maxVal = sorted.length ? Math.max(...sorted.map(([,v]) => v)) : 100;
+
+    formatChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: sorted.map(([fmt]) => fmt),
+            datasets: [{
+                data: sorted.map(([, v]) => v),
+                backgroundColor: sorted.map((_, i) => colors[i % colors.length]),
+                borderColor: '#ffffff',
+                borderWidth: 0.5,
+                barThickness: 16,
+            }]
+        },
+        options: {
+            indexAxis: 'y',          // 水平条形图
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => {
+                            const v = ctx.raw;
+                            const pct = total > 0 ? (v / total * 100).toFixed(1) : '0.0';
+                            return '¥' + v.toLocaleString() + '  ' + pct + '%';
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    display: false,
+                    max: Math.ceil(maxVal * 1.4), // 留足标签空间（对齐原型 1.35x）
+                },
+                y: {
+                    ticks: {
+                        font: { size: 12 },
+                        padding: 4,
+                    },
+                    grid: { display: false }
+                }
+            }
+        },
+        plugins: [{
+            // 条尾标注：￥金额  占比%
+            id: 'barLabels',
+            afterDatasetsDraw(chart) {
+                const ctx2 = chart.ctx;
+                const meta = chart.getDatasetMeta(0);
+                ctx2.font = '11px "Microsoft YaHei", sans-serif';
+                ctx2.textAlign = 'left';
+                ctx2.textBaseline = 'middle';
+                meta.data.forEach((bar, i) => {
+                    const v = chart.data.datasets[0].data[i];
+                    const pct = total > 0 ? (v / total * 100).toFixed(1) : '0.0';
+                    const x = bar.x + 6;  // 紧贴条形末端
+                    const y = bar.y;
+                    ctx2.fillStyle = '#555';
+                    ctx2.fillText('¥' + v.toLocaleString() + '  ' + pct + '%', x, y);
+                });
+            }
+        }]
+    });
+}
+
+// ===== 业态排名（对齐原型：业态/销售额/日环比/同比上周） =====
+function renderFormatRank(records, dateStr) {
+    const curDate = new Date(dateStr + 'T00:00:00');
+    const prevDate = new Date(curDate); prevDate.setDate(prevDate.getDate() - 1);
+    const lastWkDate = new Date(curDate); lastWkDate.setDate(lastWkDate.getDate() - 7);
+    const prevStr = toLocalDateStr(prevDate);
+    const lastWkStr = toLocalDateStr(lastWkDate);
+
+    const latestRecords  = records.filter(r => r.日期 === dateStr);
+    const prevRecords    = records.filter(r => r.日期 === prevStr);
+    const lastWkRecords  = records.filter(r => r.日期 === lastWkStr);
+
+    // 按业态汇总
+    function groupByFmt(recs) {
+        const m = {};
+        recs.forEach(r => {
+            const f = r.业态 || '未知';
+            if (!m[f]) m[f] = 0;
+            m[f] += r.营业额 || 0;
+        });
+        return m;
+    }
+    const fmtNow  = groupByFmt(latestRecords);
+    const fmtPrev = groupByFmt(prevRecords);
+    const fmtLW   = groupByFmt(lastWkRecords);
+
+    function rateStr(cur, prev) {
+        if (!prev || prev === 0) return '—';
+        const r = (cur - prev) / prev * 100;
+        if (r === 0) return '—';
+        const sym = r > 0 ? '▲' : '▼';
+        return `<span style="color:${r > 0 ? '#c0392b' : '#27ae60'}">${sym} ${r > 0 ? '+' : ''}${r.toFixed(1)}%</span>`;
+    }
+
+    const sorted = Object.entries(fmtNow).sort((a, b) => b[1] - a[1]);
+
+    let html = '<table class="rank-table"><thead><tr><th>业态</th><th>销售额</th><th>日环比</th><th>日同比上周</th></tr></thead><tbody>';
+    sorted.forEach(([fmt, sales]) => {
+        html += `<tr>
+            <td>${fmt}</td>
+            <td>¥${sales.toLocaleString()}</td>
+            <td>${rateStr(sales, fmtPrev[fmt] || 0)}</td>
+            <td>${rateStr(sales, fmtLW[fmt] || 0)}</td>
+        </tr>`;
+    });
+    if (!sorted.length) html += '<tr><td colspan="4" class="empty-tip">暂无数据</td></tr>';
+    html += '</tbody></table>';
+    document.getElementById('formatRankContent').innerHTML = html;
+}
+
+// ===== 商铺明细（对齐原型：商铺/业态/销售额/成单/客单价/转化率/日坪效/日环比/同比上周） =====
+function renderShopDetail(latestRecords) {
+    if (!latestRecords.length) {
+        document.getElementById('shopDetailBody').innerHTML = '<tr><td colspan="9" class="empty-tip">暂无数据</td></tr>';
+        return;
+    }
+
+    // 前一天 + 上周同日
+    const dateStr = document.getElementById('bizDate').value;
+    const curDate = new Date(dateStr + 'T00:00:00');
+    const prevDate = new Date(curDate); prevDate.setDate(prevDate.getDate() - 1);
+    const lastWkDate = new Date(curDate); lastWkDate.setDate(lastWkDate.getDate() - 7);
+    const prevStr = toLocalDateStr(prevDate);
+    const lastWkStr = toLocalDateStr(lastWkDate);
+
+    // 从 records 中取前一天和上周同日数据
+    const allRecords = window._bizAllRecords || [];
+    const prevRecords = allRecords.filter(r => r.日期 === prevStr);
+    const lastWkRecords = allRecords.filter(r => r.日期 === lastWkStr);
+
+    // 构建前一日/上周同日映射
+    const prevMap = {};
+    prevRecords.forEach(r => { if (!prevMap[r.商户名称]) prevMap[r.商户名称] = r; });
+    const lwMap = {};
+    lastWkRecords.forEach(r => { if (!lwMap[r.商户名称]) lwMap[r.商户名称] = r; });
+
+    function dodRate(cur, prev) {
+        if (!prev || prev === 0) return null;
+        return (cur - prev) / prev * 100;
+    }
+
+    // 按商户汇总最新日期
+    const groups = {};
+    latestRecords.forEach(r => {
+        const key = r.商户名称;
+        if (!groups[key]) groups[key] = { 业态: r.业态, 面积: r.面积, 客流量: 0, 营业额: 0, 成交量: 0 };
+        groups[key].客流量 += r.客流量 || 0;
+        groups[key].营业额 += r.营业额 || 0;
+        groups[key].成交量 += r.成交量 || 0;
+    });
+    const sorted = Object.entries(groups).sort((a, b) => b[1].营业额 - a[1].营业额);
+
+    let html = '';
+    sorted.forEach(([name, d]) => {
+        const conv = d.客流量 > 0 ? (d.成交量 / d.客流量 * 100).toFixed(1) : '0.0';
+        const avgVal = d.成交量 > 0 ? (d.营业额 / d.成交量).toFixed(2) : '0.00';
+        const px = d.面积 > 0 ? (d.营业额 / d.面积).toFixed(2) : '0.00';
+
+        const pr = prevMap[name];
+        const lr = lwMap[name];
+        const dod = dodRate(d.营业额, pr ? (pr.营业额 || 0) : null);
+        const wow = dodRate(d.营业额, lr ? (lr.营业额 || 0) : null);
+
+        function rateHtml(val) {
+            if (val === null || val === 0) return '—';
+            const sym = val > 0 ? '▲' : '▼';
+            const color = val > 0 ? '#c0392b' : '#27ae60';
+            return `<span style="color:${color}">${sym} ${val > 0 ? '+' : ''}${val.toFixed(1)}%</span>`;
+        }
+
+        html += `<tr>
+            <td>${name}</td><td>${d.业态}</td><td>¥${d.营业额.toLocaleString()}</td><td>${d.成交量.toLocaleString()}</td>
+            <td>¥${avgVal}</td><td>${conv}%</td><td>¥${px}/㎡·天</td>
+            <td>${rateHtml(dod)}</td><td>${rateHtml(wow)}</td>
+        </tr>`;
+    });
+    document.getElementById('shopDetailBody').innerHTML = html;
+}
+</script>
+{% endblock %}

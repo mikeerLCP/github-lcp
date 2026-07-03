@@ -1,0 +1,488 @@
+{% extends "base.html" %}
+{% block title %}LCP商管 · 租金收缴{% endblock %}
+{% block head %}
+<style>
+.overdue-red { color: #e53935; font-weight: 600; }
+.overdue-orange { color: #f57c00; }
+.green-ok { color: #43a047; }
+.blue-info { color: #2980b9; }
+.summary-row { background: #f0f7ff; font-weight: 700; border-top: 2px solid #4361ee; }
+.summary-row td { padding: 10px 8px !important; }
+.filter-ext { display: flex; gap: 6px; align-items: center; font-size: 12px; color: #888; }
+.filter-ext input { width: 65px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; }
+input.editable-cell { width: 86px; padding: 4px 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; text-align: right; }
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; }
+/* 收缴计划弹窗 - 合同详情区 */
+.plan-contract-box { border: 1px solid #e0e0e0; border-radius: 6px; padding: 12px 16px; margin-bottom: 12px; background: #fafbfc; }
+.plan-title-line { font-size: 15px; font-weight: 700; color: #1a5276; margin-bottom: 4px; }
+.plan-contact-line { font-size: 12px; color: #555; margin-bottom: 6px; }
+.plan-sep { height: 1px; background: #ddd; margin: 6px 0; }
+.plan-fields-row { font-size: 12px; color: #555; display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 4px 0; }
+.plan-fields-row b { color: #333; }
+.plan-status-line { font-size: 13px; font-weight: 700; color: #333; margin-top: 4px; }
+.plan-status-active { color: #27ae60; }
+.plan-status-expired { color: #c0392b; }
+.plan-status-terminated { color: #7f8c8d; }
+.plan-remark { font-size: 12px; color: #888; margin-top: 4px; }
+/* 明细表格 */
+.plan-table { font-size: 12px; width: 100%; border-collapse: collapse; }
+.plan-table thead { background: #f5f7fa; position: sticky; top: 0; }
+.plan-table th { padding: 6px 8px; text-align: center; font-weight: 600; white-space: nowrap; }
+.plan-table td { padding: 5px 8px; text-align: center; white-space: nowrap; }
+.plan-table .text-right { text-align: right; }
+.plan-overdue-row { background: #ffeeee !important; }
+.plan-overdue-row td { color: #e53935; }
+.plan-summary-bar { margin-top: 10px; padding: 8px 12px; background: #f8faff; border-radius: 6px; font-size: 13px; display: flex; flex-wrap: wrap; gap: 12px 24px; }
+/* 批量操作 */
+.batch-bar { display: flex; gap: 6px; align-items: center; font-size: 12px; }
+.batch-bar .batch-count { color: #666; margin-left: 4px; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">💰 租金收缴</h1>
+    <div class="btn-group">
+        <button class="btn btn-outline btn-sm" onclick="location.reload()">🔄 刷新</button>
+        <button class="btn btn-primary btn-sm" onclick="openSelectedPlan()">📋 收缴计划</button>
+        <button class="btn btn-success btn-sm" onclick="generateDemandLetter()">📨 生成催缴函</button>
+    </div>
+</div>
+
+<div class="card">
+    <!-- 筛选栏（对齐原型） -->
+    <div class="filter-bar">
+        <input type="text" id="filterKeyword" placeholder="搜索合同号/商户名/铺位号..." oninput="applyRentFilter()">
+        <div class="filter-ext">
+            <span>距下次(天)：</span>
+            <input type="number" id="filterNextMin" placeholder="最小" oninput="applyRentFilter()">
+            <span>~</span>
+            <input type="number" id="filterNextMax" placeholder="最大" oninput="applyRentFilter()">
+        </div>
+        <label style="font-size:12px;display:flex;align-items:center;gap:3px;cursor:pointer;">
+            <input type="checkbox" id="filterOverdue" onchange="applyRentFilter()"> 已逾期
+        </label>
+        <button class="btn btn-sm btn-primary" onclick="applyRentFilter()">🔍 执行筛选</button>
+        <button class="btn btn-sm btn-outline" onclick="clearRentFilter()">✕ 清空</button>
+    </div>
+
+
+
+    <!-- 表格（对齐原型14列） -->
+    <div class="table-wrapper">
+        <table id="rentTable" style="font-size:12px;">
+            <thead>
+                <tr>
+                    <th style="width:36px;"><input type="checkbox" class="check-all-th" onclick="toggleAllChecks(this)"></th>
+                    <th>序号</th>
+                    <th>合同号</th><th>商户名称</th><th>免租期(天)</th>
+                    <th>总租金</th><th>总物业费</th><th>总计预期收入</th>
+                    <th>总计已收租金</th><th>总计已收物业费</th><th>总计剩余收入</th>
+                    <th>下次缴费剩余天数</th><th>租金逾期状态</th><th>物业费逾期状态</th>
+                    <th>逾期金额</th>
+                </tr>
+            </thead>
+            <tbody id="rentTableBody">
+                {% for r in rent_overview %}
+                <tr data-nextdays="{{ r.下次天数 if r.下次天数 != -1 else '9999' }}"
+                    data-overdue="{{ '1' if r.逾期金额 > 0 else '0' }}"
+                    data-status="{{ r.租金逾期状态 }}">
+                    <td><input type="checkbox" class="row-check" value="{{ r.合同号 }}"></td>
+                    <td class="text-center">{{ loop.index }}</td>
+                    <td><strong>{{ r.合同号 }}</strong></td>
+                    <td>{{ r.商户名称 }}</td>
+                    <td class="text-center">{{ r['免租期(天)'] }}</td>
+                    <td class="text-right">¥{{ "%.2f"|format(r.总租金) }}</td>
+                    <td class="text-right">¥{{ "%.2f"|format(r.总物业费) }}</td>
+                    <td class="text-right">¥{{ "%.2f"|format(r.总计预期收入) }}</td>
+                    <td class="text-right">¥{{ "%.2f"|format(r.总计已收租金) }}</td>
+                    <td class="text-right">¥{{ "%.2f"|format(r.总计已收物业费) }}</td>
+                    <td class="text-right">¥{{ "%.2f"|format(r.总计剩余收入) }}</td>
+                    <td class="text-center">
+                        {% if r.下次缴费剩余天数 == '已逾期' %}<span class="badge badge-overdue">{{ r.下次缴费剩余天数 }}</span>
+                        {% elif r.下次缴费剩余天数 == '已到期' %}<span class="badge badge-ended">{{ r.下次缴费剩余天数 }}</span>
+                        {% elif r.下次缴费剩余天数 == '已终止' %}<span class="badge badge-terminated">{{ r.下次缴费剩余天数 }}</span>
+                        {% elif r.下次缴费剩余天数 == '已结清' %}<span class="badge badge-settled">{{ r.下次缴费剩余天数 }}</span>
+                        {% elif r.下次缴费剩余天数 == '未起租' %}<span class="badge badge-notstarted">{{ r.下次缴费剩余天数 }}</span>
+                        {% else %}{{ r.下次缴费剩余天数 }}{% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if r.租金逾期状态 == '已逾期' %}<span class="badge badge-overdue">已逾期</span>
+                        {% elif r.租金逾期状态 == '正常' %}<span class="badge badge-active">正常</span>
+                        {% elif r.租金逾期状态 == '已结清' %}<span class="badge badge-settled">已结清</span>
+                        {% elif r.租金逾期状态 == '已到期' %}<span class="badge badge-ended">已到期</span>
+                        {% elif r.租金逾期状态 == '已终止' %}<span class="badge badge-terminated">已终止</span>
+                        {% elif r.租金逾期状态 == '未起租' %}<span class="badge badge-notstarted">未起租</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if r.物业费逾期状态 == '已逾期' %}<span class="badge badge-overdue">已逾期</span>
+                        {% elif r.物业费逾期状态 == '正常' %}<span class="badge badge-active">正常</span>
+                        {% elif r.物业费逾期状态 == '已结清' %}<span class="badge badge-settled">已结清</span>
+                        {% elif r.物业费逾期状态 in ('已到期','已终止') %}<span class="badge badge-terminated">{{ r.物业费逾期状态 }}</span>
+                        {% elif r.物业费逾期状态 == '未起租' %}<span class="badge badge-notstarted">未起租</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-right">
+                        {% if r.逾期金额 > 0 %}<span class="overdue-red">¥{{ "%.2f"|format(r.逾期金额) }}</span>
+                        {% else %}¥0.00{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot id="rentTableFoot">
+                <tr class="summary-row">
+                    <td colspan="4">合计（{{ rent_overview|length }} 份合同）</td>
+                    <td class="text-center">-</td>
+                    <td class="text-right">¥{{ "%.2f"|format(rent_overview|sum(attribute='总租金')) }}</td>
+                    <td class="text-right">¥{{ "%.2f"|format(rent_overview|sum(attribute='总物业费')) }}</td>
+                    <td class="text-right">¥{{ "%.2f"|format(rent_overview|sum(attribute='总计预期收入')) }}</td>
+                    <td class="text-right">¥{{ "%.2f"|format(rent_overview|sum(attribute='总计已收租金')) }}</td>
+                    <td class="text-right">¥{{ "%.2f"|format(rent_overview|sum(attribute='总计已收物业费')) }}</td>
+                    <td class="text-right">¥{{ "%.2f"|format(rent_overview|sum(attribute='总计剩余收入')) }}</td>
+                    <td>-</td><td>-</td><td>-</td>
+                    <td class="text-right"><span class="overdue-red">¥{{ "%.2f"|format(rent_overview|sum(attribute='逾期金额')) }}</span></td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+
+<!-- 收缴计划 Modal（对齐原型 show_plan：合同详情三层 + 7列明细表格） -->
+<div class="modal-overlay" id="planModal">
+    <div class="modal-box" style="max-width:1080px;">
+        <button class="modal-close" onclick="closeModal('planModal')">✕</button>
+        <h3 id="planTitle">📋 收缴计划</h3>
+
+        <!-- 合同详情区（对齐原型三层布局） -->
+        <div class="plan-contract-box" id="planContractInfo"></div>
+
+        <!-- 收缴计划明细表格 -->
+        <div style="max-height:340px;overflow-y:auto;border:1px solid #e0e0e0;border-radius:4px;">
+            <table class="plan-table" id="planTable">
+                <thead>
+                    <tr>
+                        <th>序号</th><th>支付时间</th><th>保底租金</th><th>提成扣点</th><th>物业费</th>
+                        <th>应缴租金</th><th>应缴物业费</th><th>意向金抵扣</th><th>本期应缴</th><th>已缴租金</th><th>已缴物业费</th>
+                    </tr>
+                </thead>
+                <tbody id="planTableBody"></tbody>
+            </table>
+        </div>
+
+        <!-- 汇总 -->
+        <div class="plan-summary-bar" id="planSummary"></div>
+
+        <div class="form-actions" style="margin-top:12px;">
+            <button type="button" class="btn btn-primary" onclick="savePlanChanges()">💾 保存</button>
+            <button type="button" class="btn btn-outline" onclick="closeModal('planModal')">关闭</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+let currentPlanCno = '';
+let currentPlanData = [];
+let currentContractData = {};
+
+function openModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+// ===== 全选 =====
+function toggleAllChecks(cb) {
+    document.querySelectorAll('.row-check').forEach(c => c.checked = cb.checked);
+}
+
+// 顶部收缴计划按钮：取选中行打开
+function openSelectedPlan() {
+    const checked = Array.from(document.querySelectorAll('.row-check:checked'));
+    if (!checked.length) { alert('请先选择一个合同'); return; }
+    if (checked.length > 1) { alert('收缴计划一次只能查看一个合同，请只选择一个'); return; }
+    showPlan(checked[0].value);
+}
+
+// ===== 收缴计划弹窗（对齐原型 show_plan） =====
+function showPlan(cno) {
+    currentPlanCno = cno;
+    fetch('/api/rent-plan/' + cno)
+        .then(r => {
+            if (!r.ok) return r.json().then(d => { throw new Error(d.error || '服务器错误'); });
+            return r.json();
+        })
+        .then(data => {
+            if (data.error) { alert(data.error); return; }
+            try {
+            currentPlanData = data.plan;
+            currentContractData = data.contract;
+            const summary = data.summary;
+            document.getElementById('planTitle').textContent = '📋 收缴计划 - ' + cno;
+
+            // === 合同详情区（对齐原型三层布局）===
+            const c = data.contract;
+            const statusColorMap = {
+                '执行中': 'plan-status-active',
+                '已到期': 'plan-status-expired',
+                '已终止': 'plan-status-terminated',
+            };
+            const statusClass = statusColorMap[c.合同状态] || '';
+            const startStr = c.租赁开始日期;
+            let notStarted = false;
+            if (startStr) {
+                const today = new Date(); today.setHours(0,0,0,0);
+                const startD = new Date(startStr + 'T00:00:00'); // 本地时区
+                notStarted = startD > today;
+            }
+            const remainDisplay = notStarted ? '未起租' : (c['剩余租期(天)'] || '-');
+
+            let infoHtml = '';
+            // 第1层：标题行
+            infoHtml += `<div class="plan-title-line">${c.合同号}　${c.商户名称}　${c.经营业态}　${c.所属项目}　${c.关联铺位号}</div>`;
+            // 第2层：联系人
+            infoHtml += `<div class="plan-contact-line">联系人：${c.联系人}　　联系电话：${c.联系电话}</div>`;
+            // 分隔线
+            infoHtml += `<div class="plan-sep"></div>`;
+            // 第3层：日期行
+            infoHtml += `<div class="plan-fields-row">`;
+            infoHtml += `<span><b>签约日期：</b>${c.签约日期}</span>`;
+            infoHtml += `<span><b>租赁开始：</b>${c.租赁开始日期}</span>`;
+            infoHtml += `<span><b>租赁结束：</b>${c.租赁结束日期}</span>`;
+            infoHtml += `<span><b>免租期：</b>${c['免租期(天)']}天</span>`;
+            infoHtml += `</div>`;
+            // 第4层：费用/押金类
+            infoHtml += `<div class="plan-fields-row">`;
+            infoHtml += `<span><b>租金模式：</b>${c.租金模式}</span>`;
+            infoHtml += `<span><b>建筑面积：</b>${c.建筑面积}㎡</span>`;
+            infoHtml += `<span><b>押金：</b>${c.押金}</span>`;
+            infoHtml += `<span><b>已付押金：</b>${(parseFloat(c.意向金抵扣押金||0) + parseFloat(c.已付补缴押金||0)).toFixed(2)}</span>`;
+            infoHtml += `</div>`;
+            // 分隔线
+            infoHtml += `<div class="plan-sep"></div>`;
+            // 底行：合同状态 + 剩余租期 + 终止日期（有则显示）
+            infoHtml += `<div class="plan-status-line">`;
+            infoHtml += `<span>合同状态：</span><span class="${statusClass}">${c.合同状态}</span>`;
+            infoHtml += `<span>　　剩余租期(天)：</span><span>${remainDisplay}</span>`;
+            if (c.终止日期) infoHtml += `<span>　　终止日期：</span><span style="color:#c0392b;">${c.终止日期}</span>`;
+            infoHtml += `</div>`;
+            // 备注
+            if (c.备注) {
+                infoHtml += `<div class="plan-remark">合同备注：${c.备注}</div>`;
+            }
+            document.getElementById('planContractInfo').innerHTML = infoHtml;
+
+            // === 明细表格（对齐原型7列 + 意向金抵扣 + 逾期高亮）===
+            const now = new Date(); now.setHours(0,0,0,0);
+            const oppDeposit = data.contract['意向金抵扣租金'] || 0;
+            let totalShould = 0, totalPaid = 0, totalProp = 0, totalPropPaid = 0, totalOppDeduct = 0;
+            let remainingDep = oppDeposit;
+            let tbodyHtml = '';
+            data.plan.forEach((p, i) => {
+                const sVal = p['应缴金额(元)'];
+                const pdVal = p['已缴金额(元)'];
+                const propVal = p['应缴物业费'] || 0;
+                const propPdVal = p['已缴物业费'] || 0;
+                // 意向金抵扣：逐期扣减应缴租金
+                const deduct = Math.min(remainingDep, sVal);
+                remainingDep -= deduct;
+                const periodTotal = sVal + propVal - deduct;
+                totalShould += sVal;
+                totalPaid += pdVal;
+                totalProp += propVal;
+                totalPropPaid += propPdVal;
+                totalOppDeduct += deduct;
+                const payDate = new Date(p['支付时间']);
+                const netRent = sVal - deduct;
+                const overdue = ((pdVal < netRent) || (propPdVal < propVal)) && payDate < now;
+                const bg = i % 2 === 0 ? '#f7faff' : '#ffffff';
+                tbodyHtml += `<tr style="background:${overdue ? '#ffeeee' : bg};" class="${overdue ? 'plan-overdue-row' : ''}">\n                    <td>${i + 1}</td>\n                    <td>${p['支付时间']}</td>\n                    <td class="text-center">${p['保底租金单价']}</td>\n                    <td class="text-center">${p['提成扣点']}%</td>\n                    <td class="text-center">${p['物业费单价']}</td>\n                    <td class="text-center">¥${sVal.toFixed(2)}</td>\n                    <td class="text-center">¥${propVal.toFixed(2)}</td>\n                    <td class="text-center">¥${deduct.toFixed(2)}</td>\n                    <td class="text-center">¥${periodTotal.toFixed(2)}</td>\n                    <td class="text-right"><input type="number" step="0.01" value="${pdVal}" class="editable-cell" data-idx="${i}" data-field="已缴金额(元)"></td>\n                    <td class="text-right"><input type="number" step="0.01" value="${propPdVal}" class="editable-cell" data-idx="${i}" data-field="已缴物业费"></td>\n                </tr>`;
+            });
+            // 汇总行
+            tbodyHtml += `<tr class="summary-row">
+                <td colspan="5">汇总</td>
+                <td class="text-right">¥${totalShould.toFixed(2)}</td>
+                <td class="text-right">¥${totalProp.toFixed(2)}</td>
+                <td class="text-right">¥${totalOppDeduct.toFixed(2)}</td>
+                <td class="text-right">¥${(totalShould + totalProp - totalOppDeduct).toFixed(2)}</td>
+                <td class="text-right">¥${totalPaid.toFixed(2)}</td>
+                <td class="text-right">¥${totalPropPaid.toFixed(2)}</td>
+            </tr>`;
+            document.getElementById('planTableBody').innerHTML = tbodyHtml;
+
+            // 汇总栏
+            document.getElementById('planSummary').innerHTML =
+                `<span><b>总租金：</b>应缴 ¥${totalShould.toFixed(2)} | 已缴 ¥${totalPaid.toFixed(2)} | 尚欠 ¥${(totalShould - totalPaid).toFixed(2)}</span>
+                 <span><b>总物业费：</b>应缴 ¥${totalProp.toFixed(2)} | 已缴 ¥${totalPropPaid.toFixed(2)} | 尚欠 ¥${(totalProp - totalPropPaid).toFixed(2)}</span>
+                 <span><b>逾期金额：</b><span class="overdue-red">¥${summary.逾期金额.toFixed(2)}</span></span>`;
+
+            openModal('planModal');
+            } catch(e) {
+                alert('渲染收缴计划出错（行号:' + (e.lineNumber||'?') + '）: ' + e.message + '\n\n堆栈: ' + (e.stack||'').substring(0,300));
+            }
+        })
+        .catch(err => alert('获取收缴计划失败：' + err.message));
+}
+
+function savePlanChanges() {
+    const updates = [];
+    document.querySelectorAll('#planTableBody .editable-cell').forEach(input => {
+        const idx = parseInt(input.dataset.idx);
+        const field = input.dataset.field;
+        const original = currentPlanData[idx][field];
+        const newVal = parseFloat(input.value) || 0;
+        if (Math.abs(newVal - original) > 0.001) {
+            const valType = field === '已缴物业费' ? '物业费' : '租金';
+            updates.push({
+                合同号: currentPlanCno,
+                支付时间: currentPlanData[idx]['支付时间'],
+                金额: newVal,
+                类型: valType
+            });
+        }
+    });
+
+    if (!updates.length) { alert('没有修改'); return; }
+
+    let done = 0;
+    updates.forEach(u => {
+        fetch('/api/rent-update-paid', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(u)
+        }).then(r => r.json()).then(res => {
+            done++;
+            if (done >= updates.length) {
+                alert('保存成功！');
+                closeModal('planModal');
+                location.reload();
+            }
+        });
+    });
+}
+
+// ===== 催缴函（选择一次保存目录，逐个生成并写入）=====
+async function generateDemandLetter() {
+    const checked = document.querySelectorAll('.row-check:checked');
+    if (!checked.length) { alert('请先选择合同'); return; }
+    if (!('showDirectoryPicker' in window)) {
+        alert('当前浏览器不支持选择保存路径，请使用 Chrome 或 Edge');
+        return;
+    }
+    const btn = document.querySelector('.btn-success');
+    const total = checked.length;
+    let fail = 0;
+
+    // 先弹出一次文件夹选择
+    let dirHandle;
+    try {
+        dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    } catch (err) {
+        return; // 用户取消
+    }
+
+    btn.disabled = true;
+    let done = 0;
+    btn.textContent = `生成中 0/${total}...`;
+
+    for (const cb of checked) {
+        const cno = cb.value;
+        const merchant = cb.closest('tr').children[3].textContent.trim();
+        try {
+            btn.textContent = `下载中 ${done + fail + 1}/${total}...`;
+            const r = await fetch('/api/generate-demand-letter', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({contract_nos: [cno]})
+            });
+            if (!r.ok) {
+                const d = await r.json();
+                throw new Error(d.error || '生成失败');
+            }
+            const blob = await r.blob();
+            const fname = `${cno} ${merchant}.docx`;
+            const fileHandle = await dirHandle.getFileHandle(fname, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            done++;
+        } catch (err) {
+            fail++;
+            alert('催缴函失败（' + cno + '）：' + err.message);
+        }
+    }
+
+    btn.disabled = false;
+    btn.textContent = '📨 生成催缴函';
+    if (fail === 0) {
+        alert(`全部 ${done} 份催缴函已保存到所选目录！`);
+    } else {
+        alert(`完成：${done} 成功，${fail} 失败`);
+    }
+}
+
+// ===== 筛选（对齐原型） =====
+function applyRentFilter() {
+    const keyword = document.getElementById('filterKeyword').value.toLowerCase();
+    const nextMin = parseInt(document.getElementById('filterNextMin').value) || -999;
+    const nextMax = parseInt(document.getElementById('filterNextMax').value) || 9999;
+    const onlyOverdue = document.getElementById('filterOverdue').checked;
+
+    const rows = document.querySelectorAll('#rentTableBody tr');
+    let count = 0;
+    let sumTr = 0, sumTp = 0, sumTe = 0, sumPd = 0, sumTpp = 0, sumTrm = 0, sumAr = 0;
+
+    rows.forEach(tr => {
+        const nextDays = parseInt(tr.dataset.nextdays) || 9999;
+        const isOverdue = tr.dataset.overdue === '1';
+        const mk = !keyword || tr.textContent.toLowerCase().includes(keyword);
+        const mn = nextDays >= nextMin && nextDays <= nextMax;
+        const mo = !onlyOverdue || isOverdue;
+        const show = mk && mn && mo;
+        tr.style.display = show ? '' : 'none';
+
+        if (show) {
+            count++;
+            const tds = tr.querySelectorAll('td');
+            // 序号(col1), 合同号(col2), 商户(col3), 免租(col4), 总租金(col5), 总物业(col6),
+            // 总预期(col7), 总已收租金(col8), 总已收物业(col9), 总剩余(col10),
+            // 下次天数(col11), 租金状态(col12), 物业状态(col13), 逾期金额(col14)
+            sumTr += parseFloat(tds[5].textContent.replace(/[^0-9.-]/g,'')) || 0;
+            sumTp += parseFloat(tds[6].textContent.replace(/[^0-9.-]/g,'')) || 0;
+            sumTe += parseFloat(tds[7].textContent.replace(/[^0-9.-]/g,'')) || 0;
+            sumPd += parseFloat(tds[8].textContent.replace(/[^0-9.-]/g,'')) || 0;
+            sumTpp += parseFloat(tds[9].textContent.replace(/[^0-9.-]/g,'')) || 0;
+            sumTrm += parseFloat(tds[10].textContent.replace(/[^0-9.-]/g,'')) || 0;
+            sumAr += parseFloat(tds[14].textContent.replace(/[^0-9.-]/g,'')) || 0;
+        }
+    });
+
+    // 更新合计行（对齐原型列顺序）
+    const foot = document.getElementById('rentTableFoot');
+    if (foot) {
+        foot.innerHTML = `<tr class="summary-row">
+            <td colspan="4">合计（${count} 份合同）</td>
+            <td class="text-center">-</td>
+            <td class="text-right">¥${sumTr.toFixed(2)}</td>
+            <td class="text-right">¥${sumTp.toFixed(2)}</td>
+            <td class="text-right">¥${sumTe.toFixed(2)}</td>
+            <td class="text-right">¥${sumPd.toFixed(2)}</td>
+            <td class="text-right">¥${sumTpp.toFixed(2)}</td>
+            <td class="text-right">¥${sumTrm.toFixed(2)}</td>
+            <td>-</td><td>-</td><td>-</td>
+            <td class="text-right"><span class="overdue-red">¥${sumAr.toFixed(2)}</span></td>
+            <td></td>
+        </tr>`;
+    }
+}
+
+function clearRentFilter() {
+    document.getElementById('filterKeyword').value = '';
+    document.getElementById('filterNextMin').value = '';
+    document.getElementById('filterNextMax').value = '';
+    document.getElementById('filterOverdue').checked = false;
+    applyRentFilter();
+}
+</script>
+{% endblock %}
