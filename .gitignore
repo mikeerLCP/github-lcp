@@ -6,3 +6,9 @@ venv/
 .venv/
 *.egg-info/
 dist/
+_debug_*.py
+商管原型/
+部署指南.md
+云端部署方案.md
+优化需求.docx
+需求沟通建议.txt
