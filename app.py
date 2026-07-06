@@ -52,11 +52,14 @@ def logout():
 @auth.login_required
 def admin_dashboard():
     """管理端仪表板"""
+    from datetime import date
     user = auth.get_current_user()
     project_filter = auth.get_project_filter()
-    stats = db.get_dashboard_stats(project_filter)
+    year = request.args.get("year", "")
+    year = int(year) if year.isdigit() else date.today().year
+    stats = db.get_dashboard_stats(project_filter, year)
     biz_data = db.get_business_dashboard_api(project_filter)
-    return render_template("admin/dashboard.html", user=user, stats=stats, biz_data=biz_data)
+    return render_template("admin/dashboard.html", user=user, stats=stats, biz_data=biz_data, sel_year=year)
 
 
 @app.route("/api/biz-dashboard")
@@ -91,12 +94,29 @@ def admin_shops_add():
         "所属项目": request.form.get("所属项目", "").strip(),
         "位置": request.form.get("位置", "").strip(),
         "铺位状态": request.form.get("铺位状态", "空置"),
-        "适用业态": request.form.get("适用业态", "").strip(),
+        "空间类型": request.form.get("空间类型", "").strip(),
+        "上下水": request.form.get("上下水", "").strip(),
+        "电力功率上限(kW)": request.form.get("电力功率上限", "").strip(),
+        "装修情况": request.form.get("装修情况", "").strip(),
+        "租金报价(元/㎡/天)": request.form.get("租金报价", "").strip(),
+        "改造条件": request.form.get("改造条件", "").strip(),
+        "户型图路径": request.form.get("户型图路径", "").strip(),
+        "现状照片路径": request.form.get("现状照片路径", "").strip(),
         "建筑面积(㎡)": request.form.get("建筑面积", "").strip(),
         "使用面积(㎡)": request.form.get("使用面积", "").strip(),
         "基准租金(元/㎡/天)": request.form.get("基准租金", "").strip(),
         "备注": request.form.get("备注", "").strip(),
     }
+    # ── 自动填充计租面积 ──
+    st = shop_data.get("空间类型", "")
+    ba = shop_data.get("建筑面积(㎡)", "")
+    ua = shop_data.get("使用面积(㎡)", "")
+    if st == "商铺":
+        shop_data["计租面积(㎡)"] = ba
+    elif st == "室外场地":
+        shop_data["计租面积(㎡)"] = ua
+    else:
+        shop_data["计租面积(㎡)"] = ""
     # ── 后端校验 ──
     if not shop_data["铺位号"]:
         flash("铺位号不能为空", "danger")
@@ -119,9 +139,9 @@ def admin_shops_add():
     is_new = not db.check_shop_no_exists(shop_data["铺位号"])
     db.save_shops([shop_data])
     op = "新增" if is_new else "修改"
-    db.log_operation(user["用户名"], user["角色"], op, "商铺",
-                     f"{op}商铺 {shop_data['铺位号']}", shop_data["铺位号"])
-    flash(f"商铺 {shop_data['铺位号']} 保存成功", "success")
+    db.log_operation(user["用户名"], user["角色"], op, "空间",
+                     f"{op}空间 {shop_data['铺位号']}", shop_data["铺位号"])
+    flash(f"空间 {shop_data['铺位号']} 保存成功", "success")
     return redirect(url_for("admin_shops"))
 
 @app.route("/admin/shops/delete/<shop_no>")
@@ -136,9 +156,9 @@ def admin_shops_delete(shop_no):
         flash(f"无法删除：铺位 {shop_no} 关联了合同（{names}），请先处理关联合同", "danger")
         return redirect(url_for("admin_shops"))
     db.delete_shop(shop_no)
-    db.log_operation(user["用户名"], user["角色"], "删除", "商铺",
-                     f"删除商铺 {shop_no}", shop_no)
-    flash(f"商铺 {shop_no} 已删除", "success")
+    db.log_operation(user["用户名"], user["角色"], "删除", "空间",
+                     f"删除空间 {shop_no}", shop_no)
+    flash(f"空间 {shop_no} 已删除", "success")
     return redirect(url_for("admin_shops"))
 
 @app.route("/admin/shops/batch_delete", methods=["POST"])
@@ -148,7 +168,7 @@ def admin_shops_batch_delete():
     user = auth.get_current_user()
     shop_nos = request.form.getlist("shop_nos")
     if not shop_nos:
-        flash("未选择任何商铺", "danger")
+        flash("未选择任何空间", "danger")
         return redirect(url_for("admin_shops"))
     deleted = []
     skipped = []
@@ -159,11 +179,11 @@ def admin_shops_batch_delete():
             skipped.append(f"{shop_no}（关联合同：{names}）")
         else:
             db.delete_shop(shop_no)
-            db.log_operation(user["用户名"], user["角色"], "批量删除", "商铺",
-                             f"批量删除商铺 {shop_no}", shop_no)
+            db.log_operation(user["用户名"], user["角色"], "批量删除", "空间",
+                             f"批量删除空间 {shop_no}", shop_no)
             deleted.append(shop_no)
     if deleted:
-        flash(f"已删除 {len(deleted)} 个商铺：{', '.join(deleted)}", "success")
+        flash(f"已删除 {len(deleted)} 个空间：{', '.join(deleted)}", "success")
     if skipped:
         flash(f"跳过 {len(skipped)} 个（有关联合同）：{'; '.join(skipped)}", "danger")
     return redirect(url_for("admin_shops"))
@@ -230,13 +250,34 @@ def _auto_expire_contracts():
         db.save_contracts(contracts)
     return modified
 
+def _auto_activate_contracts():
+    """将签约日期≤今天的待生效合同翻转为执行中"""
+    contracts = db.load_contracts()
+    today = date.today()
+    modified = False
+    for c in contracts:
+        status = c.get("合同状态", "")
+        sign_str = c.get("签约日期", "")
+        if status == "待生效" and sign_str:
+            try:
+                sign_dt = datetime.strptime(sign_str, "%Y-%m-%d").date()
+                if sign_dt <= today:
+                    c["合同状态"] = "执行中"
+                    modified = True
+            except Exception:
+                pass
+    if modified:
+        db.save_contracts(contracts)
+    return modified
+
 @app.route("/admin/contracts")
 @auth.admin_required
 def admin_contracts():
     """合同列表"""
-    # 先自动检查到期合同，再同步铺位状态（对齐原型：打开合同模块时自动执行）
+    # 先自动检查到期合同、自动激活待生效合同，再同步铺位状态
     try:
         _auto_expire_contracts()
+        _auto_activate_contracts()
         _sync_shop_status()
     except Exception as e:
         print(f"[合同自动检查] {e}")
@@ -248,7 +289,7 @@ def admin_contracts():
     from config import PROJECT_OPTIONS, BUSINESS_TYPE
     return render_template("admin/contracts.html", user=user, contracts=contracts,
                            shops=shops, projects=PROJECT_OPTIONS, biz_types=BUSINESS_TYPE,
-                           opps=opps)
+                           opps=opps, today=date.today().isoformat())
 
 @app.route("/admin/contracts/add", methods=["POST"])
 @auth.admin_required
@@ -281,6 +322,8 @@ def admin_contracts_add():
         "签约主体": request.form.get("签约主体", ""),
         "租金模式": request.form.get("租金模式", "保底").strip(),
         "物业服务费单价（元/㎡/天）": request.form.get("物业费单价", "0"),
+        "终止原因": request.form.get("终止原因", "").strip(),
+        "前序合同号": request.form.get("前序合同号", "").strip(),
     }
 
     # 免租计划 JSON 容错
@@ -315,16 +358,10 @@ def admin_contracts_add():
         return redirect(url_for("admin_contracts"))
 
     if is_edit:
-        # ── 编辑模式：只校验可改字段（对齐原型 838-855） ──
-        status = contract_data["合同状态"]
-        if not status:
-            return _err("请选择合同状态")
-        if status == "已终止" and not contract_data["终止日期"]:
-            return _err("已终止的合同请填写终止日期")
+        # ── 编辑模式 ──
         phone_val = contract_data["联系电话"]
         if phone_val and not phone_val.isdigit():
             return _err("联系电话只能是数字")
-        # 已付补缴押金校验
         extra_dep = contract_data["已付补缴押金"]
         try:
             if extra_dep and float(extra_dep) < 0:
@@ -332,7 +369,7 @@ def admin_contracts_add():
         except ValueError:
             return _err("已付/补缴押金格式错误")
     else:
-        # ── 新增模式：全套校验（对齐原型 856-1021） ──
+        # ── 新增模式 ──
         # 1. 合同号
         c_no = contract_data["合同号"]
         if not c_no:
@@ -356,7 +393,7 @@ def admin_contracts_add():
         for c in all_contracts:
             if c.get("关联铺位号") == sn and c["合同号"] != c_no:
                 return _err(f"铺位 {sn} 已被合同 {c['合同号']} 占用")
-        # 7. 保底租金（提成模式跳过；有分段计划时跳过单值校验）
+        # 7. 保底租金
         rm = contract_data["租金模式"]
         base_rent_plan_arr = contract_data.get("保底租金计划", [])
         comm_plan_arr = contract_data.get("提成扣点计划", [])
@@ -374,7 +411,7 @@ def admin_contracts_add():
                             return _err(f"保底租金不能低于基准租金 {base_rent}")
                 except ValueError:
                     return _err("保底租金格式错误")
-        # 8. 提成扣点（有分段计划时跳过单值校验）
+        # 8. 提成扣点
         commission_val = contract_data["提成租金扣点(%)"]
         if rm in ("提成", "取高"):
             if not comm_plan_arr:
@@ -405,8 +442,6 @@ def admin_contracts_add():
             return _err("请选择签约日期")
         try:
             sign_dt = datetime.strptime(sign_str, "%Y-%m-%d").date()
-            if sign_dt > today_val:
-                return _err("签约日期不能晚于今天")
         except ValueError:
             return _err("签约日期格式错误")
         # 11. 租赁开始日期
@@ -450,22 +485,35 @@ def admin_contracts_add():
                 return _err("已付/补缴押金不能为负数")
         except ValueError:
             return _err("已付/补缴押金格式错误")
-        # 16. 合同状态
-        status = contract_data["合同状态"]
-        if not status:
-            return _err("请选择合同状态")
-        # 17. 联系电话
+        # 16. 联系电话
         phone_val = contract_data["联系电话"]
         if phone_val and not phone_val.isdigit():
             return _err("联系电话只能是数字")
 
-    # 自动计算剩余租期（对齐原型逻辑）
-    # 已终止/已到期/有终止日期 → 剩余租期为0
-    status = contract_data.get("合同状态", "")
+    # 已付/补缴押金 ≤ 押金 - 意向金抵扣押金
+    try:
+        deposit_val = float(contract_data.get("押金", 0) or 0)
+        intent_val = float(contract_data.get("意向金抵扣押金", 0) or 0)
+        extra_val = float(contract_data.get("已付补缴押金", 0) or 0)
+        if extra_val > deposit_val - intent_val:
+            return _err(f"已付/补缴押金不能超过 {max(0, deposit_val - intent_val):.2f}（押金-意向金抵扣押金）")
+    except ValueError:
+        pass
+
+    # 自动计算合同状态 + 剩余租期
     term_date = contract_data.get("终止日期", "")
-    if status in ("已终止", "已到期") or term_date:
+    sign_str = contract_data.get("签约日期", "")
+    if contract_data.get("终止原因") or term_date:
+        contract_data["合同状态"] = "已终止"
         contract_data["剩余租期(天)"] = "0"
     else:
+        try:
+            if sign_str and datetime.strptime(sign_str, "%Y-%m-%d").date() > today_val:
+                contract_data["合同状态"] = "待生效"
+            else:
+                contract_data["合同状态"] = "执行中"
+        except Exception:
+            contract_data["合同状态"] = "执行中"
         try:
             end_dt = datetime.strptime(contract_data["租赁结束日期"], "%Y-%m-%d").date()
             remain = max(0, (end_dt - today_val).days)
@@ -552,6 +600,43 @@ def admin_contracts_batch_delete():
     except Exception:
         pass
     flash(f"已删除 {len(contract_nos)} 个合同", "success")
+    return redirect(url_for("admin_contracts"))
+
+@app.route("/admin/contracts/terminate", methods=["POST"])
+@auth.admin_required
+def admin_contracts_terminate():
+    """终止合同（设置终止日期 + 终止原因）"""
+    user = auth.get_current_user()
+    contract_no = request.form.get("contract_no", "").strip()
+    term_date = request.form.get("终止日期", "").strip()
+    term_reason = request.form.get("终止原因", "").strip()
+    if not contract_no:
+        flash("合同号不能为空", "danger")
+        return redirect(url_for("admin_contracts"))
+    if not term_date:
+        flash("请选择终止日期", "danger")
+        return redirect(url_for("admin_contracts"))
+    all_contracts = db.load_contracts()
+    found = None
+    for c in all_contracts:
+        if c["合同号"] == contract_no:
+            found = c
+            break
+    if not found:
+        flash(f"合同 {contract_no} 不存在", "danger")
+        return redirect(url_for("admin_contracts"))
+    found["终止日期"] = term_date
+    found["终止原因"] = term_reason
+    found["合同状态"] = "已终止"
+    found["剩余租期(天)"] = "0"
+    db.save_contracts([found])
+    db.log_operation(user["用户名"], user["角色"], "终止", "合同",
+                     f"终止合同 {contract_no}", contract_no)
+    try:
+        _sync_shop_status()
+    except Exception:
+        pass
+    flash(f"合同 {contract_no} 已终止", "success")
     return redirect(url_for("admin_contracts"))
 
 # ===================== 管理端 - 租金收缴 =====================
@@ -691,12 +776,21 @@ def api_rent_plan(contract_no):
         shops_cache = db.load_shops(project_filter)
         payments_cache = db.load_payments(project_filter)
         biz_cache = db.load_business_data(project_filter)
-        # 查出铺位建筑面积
-        shop_area = ""
+        # 查出铺位面积信息
+        shop_area = shop_space_type = shop_building_area = shop_use_area = shop_area_source = ""
         shop_no = contract.get("关联铺位号", "")
         for shop in shops_cache:
             if str(shop.get("铺位号", "")).strip() == str(shop_no).strip():
-                shop_area = shop.get("建筑面积(㎡)", "")
+                shop_space_type = shop.get("空间类型", "")
+                shop_building_area = shop.get("建筑面积(㎡)", "")
+                shop_use_area = shop.get("使用面积(㎡)", "")
+                shop_area = shop.get("计租面积(㎡)", "")
+                if not shop_area:
+                    shop_area = shop_building_area
+                if shop_space_type == "商铺":
+                    shop_area_source = "建筑面积"
+                elif shop_space_type == "室外场地":
+                    shop_area_source = "使用面积"
                 break
         plan = utils.generate_rent_plan(contract, shops_cache, payments_cache, biz_cache)
 
@@ -757,6 +851,8 @@ def api_rent_plan(contract_no):
                 "剩余租期(天)": contract.get("剩余租期(天)", ""),
                 "备注": contract.get("备注", ""),
             "建筑面积": shop_area,
+            "空间类型": shop_space_type,
+            "计租面积来源": shop_area_source,
             "意向金抵扣租金": opp_deposit,
             },
             "summary": {
@@ -1489,22 +1585,16 @@ def api_shops_by_project():
     biz_types_raw = request.args.get("biz_types", "").strip()
     shops = db.load_shops()
     # biz_types 可能是多个业态（中文顿号分隔）
-    biz_types = [x.strip() for x in biz_types_raw.split("、") if x.strip()] if biz_types_raw else []
     results = []
     for s in shops:
         if s.get("铺位状态", "") != "空置":
             continue
         if project and s.get("所属项目", "") != project:
             continue
-        if biz_types:
-            shop_biz = [x.strip() for x in s.get("适用业态", "").split("、") if x.strip()]
-            if not any(t in shop_biz for t in biz_types):
-                continue
         results.append({
             "铺位号": s.get("铺位号", ""),
             "所属项目": s.get("所属项目", ""),
-            "适用业态": s.get("适用业态", ""),
-            "建筑面积(㎡)": s.get("建筑面积(㎡)", s.get("计租面积(㎡)", "")),
+            "建筑面积(㎡)": s.get("计租面积(㎡)", s.get("建筑面积(㎡)", "")),
             "基准租金(元/㎡/天)": s.get("基准租金(元/㎡/天)", ""),
             "铺位状态": s.get("铺位状态", ""),
         })
@@ -1532,34 +1622,23 @@ def api_contract_precheck():
 @app.route("/api/shops-for-contract")
 @auth.login_required
 def api_shops_for_contract():
-    """AJAX：合同模块选择铺位，排除已被有效合同占用的铺位"""
+    """AJAX：合同模块选择铺位，按项目筛选空置铺位"""
     project = request.args.get("project", "").strip()
-    biz_type = request.args.get("biz_type", "").strip()
-    edit_shop = request.args.get("edit_shop", "").strip()  # 编辑模式时当前合同已关联的铺位号，允许保留
+    edit_shop = request.args.get("edit_shop", "").strip()
+    exclude_no = request.args.get("exclude_no", "").strip()  # 续签时排除自身合同
     shops = db.load_shops()
     contracts = db.load_contracts()
-    # 获取已被有效合同占用的铺位号
-    occupied = set()
-    for c in contracts:
-        if c.get("合同状态", "") in ("待生效", "执行中", "即将到期"):
-            occupied.add(c.get("关联铺位号", ""))
     results = []
     for s in shops:
         sno = s.get("铺位号", "")
-        # 排除被占用的（编辑模式下保留当前已关联铺位）
-        if sno in occupied and sno != edit_shop:
+        if s.get("铺位状态", "") != "空置":
             continue
         if project and s.get("所属项目", "") != project:
             continue
-        if biz_type:
-            shop_biz = [x.strip() for x in s.get("适用业态", "").split("、") if x.strip()]
-            if not any(t in shop_biz for t in [biz_type]):
-                continue
         results.append({
             "铺位号": sno,
             "所属项目": s.get("所属项目", ""),
-            "适用业态": s.get("适用业态", ""),
-            "建筑面积(㎡)": s.get("建筑面积(㎡)", ""),
+            "建筑面积(㎡)": s.get("计租面积(㎡)", s.get("建筑面积(㎡)", "")),
             "基准租金(元/㎡/天)": s.get("基准租金(元/㎡/天)", ""),
             "铺位状态": s.get("铺位状态", ""),
         })

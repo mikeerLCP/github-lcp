@@ -70,7 +70,7 @@
         <table id="oppTable" style="font-size:12px;">
             <thead>
                 <tr>
-                    <th style="width:36px;"><input type="checkbox" class="check-all" onclick="toggleAll(this)"></th>
+                    <th style="width:36px;"></th>
                     <th>序号</th><th>当前阶段</th><th>最近跟进日期</th><th>跟进结果</th>
                     <th>意向主体</th><th>商户名称</th><th>意向项目</th><th>意向租赁期限(年)</th>
                     <th>意向业态</th><th>意向铺位</th><th>建筑面积(㎡)</th><th>意向租金单价</th>
@@ -340,13 +340,14 @@ let currentDepOppNo = '';
 function openModal(id) { document.getElementById(id).classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
-// 全选 / 已选计数
-function toggleAll(cb) {
-    document.querySelectorAll('.row-check').forEach(c => c.checked = cb.checked);
-    updateSelectedCount();
-}
+// 单选 / 已选计数
 document.addEventListener('change', function(e) {
-    if (e.target.classList.contains('row-check')) updateSelectedCount();
+    if (e.target.classList.contains('row-check') && e.target.checked) {
+        document.querySelectorAll('.row-check:checked').forEach(c => {
+            if (c !== e.target) c.checked = false;
+        });
+    }
+    updateSelectedCount();
 });
 function updateSelectedCount() {
     const count = document.querySelectorAll('.row-check:checked').length;

@@ -44,7 +44,7 @@ def _execute_insert(sql, params=None):
 def get_user_by_name(username):
     """根据用户名查找用户，返回 dict 或 None"""
     rows = _execute(
-        "SELECT id, 用户名, 密码, 角色, 所属项目 FROM users WHERE 用户名 = %s",
+        "SELECT id, 用户名, 密码, 角色, 所属项目 FROM users WHERE BINARY 用户名 = %s",
         (username,), fetch=True
     )
     if not rows:
@@ -113,18 +113,18 @@ def verify_user(username, password):
     return None
 
 # ===================== 商铺 =====================
-SHOP_COLS = ["铺位号", "所属项目", "位置", "铺位状态", "适用业态", "建筑面积㎡", "使用面积㎡", "基准租金元㎡天", "备注"]
+SHOP_COLS = ["铺位号", "所属项目", "位置", "铺位状态", "空间类型", "上下水", "电力功率上限kW", "装修情况", "租金报价元㎡天", "改造条件", "户型图路径", "现状照片路径", "建筑面积㎡", "使用面积㎡", "计租面积㎡", "基准租金元㎡天", "备注"]
 
 def load_shops(project_filter=None):
     """加载商铺列表，可选按项目过滤"""
     if project_filter:
         rows = _execute(
-            "SELECT 铺位号, 所属项目, 位置, 铺位状态, 适用业态, 建筑面积㎡, 使用面积㎡, 基准租金元㎡天, 备注 FROM shops WHERE 所属项目 = %s",
+            "SELECT 铺位号, 所属项目, 位置, 铺位状态, 空间类型, 上下水, 电力功率上限kW, 装修情况, 租金报价元㎡天, 改造条件, 户型图路径, 现状照片路径, 建筑面积㎡, 使用面积㎡, 计租面积㎡, 基准租金元㎡天, 备注 FROM shops WHERE 所属项目 = %s",
             (project_filter,), fetch=True
         )
     else:
         rows = _execute(
-            "SELECT 铺位号, 所属项目, 位置, 铺位状态, 适用业态, 建筑面积㎡, 使用面积㎡, 基准租金元㎡天, 备注 FROM shops",
+            "SELECT 铺位号, 所属项目, 位置, 铺位状态, 空间类型, 上下水, 电力功率上限kW, 装修情况, 租金报价元㎡天, 改造条件, 户型图路径, 现状照片路径, 建筑面积㎡, 使用面积㎡, 计租面积㎡, 基准租金元㎡天, 备注 FROM shops",
             fetch=True
         )
     if not rows:
@@ -136,11 +136,19 @@ def load_shops(project_filter=None):
             "所属项目": r[1] or "",
             "位置": r[2] or "",
             "铺位状态": r[3] or "",
-            "适用业态": r[4] or "",
-            "建筑面积(㎡)": str(float(r[5])) if r[5] is not None else "",
-            "使用面积(㎡)": str(float(r[6])) if r[6] is not None else "",
-            "基准租金(元/㎡/天)": str(float(r[7])) if r[7] is not None else "",
-            "备注": r[8] or "",
+            "空间类型": r[4] or "",
+            "上下水": r[5] or "",
+            "电力功率上限(kW)": str(float(r[6])) if r[6] is not None else "",
+            "装修情况": r[7] or "",
+            "租金报价(元/㎡/天)": str(float(r[8])) if r[8] is not None else "",
+            "改造条件": r[9] or "",
+            "户型图路径": r[10] or "",
+            "现状照片路径": r[11] or "",
+            "建筑面积(㎡)": str(float(r[12])) if r[12] is not None else "",
+            "使用面积(㎡)": str(float(r[13])) if r[13] is not None else "",
+            "计租面积(㎡)": str(float(r[14])) if r[14] is not None else "",
+            "基准租金(元/㎡/天)": str(float(r[15])) if r[15] is not None else "",
+            "备注": r[16] or "",
         }
         result.append(shop)
     return result
@@ -156,18 +164,30 @@ def save_shops(data):
             s.get("所属项目", ""),
             s.get("位置", ""),
             s.get("铺位状态", ""),
-            s.get("适用业态", ""),
+            s.get("空间类型", ""),
+            s.get("上下水", ""),
+            float(s.get("电力功率上限(kW)", 0) or 0) if s.get("电力功率上限(kW)") else None,
+            s.get("装修情况", ""),
+            float(s.get("租金报价(元/㎡/天)", 0) or 0) if s.get("租金报价(元/㎡/天)") else None,
+            s.get("改造条件", ""),
+            s.get("户型图路径", ""),
+            s.get("现状照片路径", ""),
             float(s.get("建筑面积(㎡)", 0) or 0) if s.get("建筑面积(㎡)") else None,
             float(s.get("使用面积(㎡)", 0) or 0) if s.get("使用面积(㎡)") else None,
+            float(s.get("计租面积(㎡)", 0) or 0) if s.get("计租面积(㎡)") else None,
             float(s.get("基准租金(元/㎡/天)", 0) or 0),
             s.get("备注", ""),
         ))
     _execute_many(
-        "INSERT INTO shops (铺位号, 所属项目, 位置, 铺位状态, 适用业态, 建筑面积㎡, 使用面积㎡, 基准租金元㎡天, 备注) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+        "INSERT INTO shops (铺位号, 所属项目, 位置, 铺位状态, 空间类型, 上下水, 电力功率上限kW, 装修情况, 租金报价元㎡天, 改造条件, 户型图路径, 现状照片路径, 建筑面积㎡, 使用面积㎡, 计租面积㎡, 基准租金元㎡天, 备注) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE "
         "所属项目=VALUES(所属项目), 位置=VALUES(位置), 铺位状态=VALUES(铺位状态), "
-        "适用业态=VALUES(适用业态), 建筑面积㎡=VALUES(建筑面积㎡), 使用面积㎡=VALUES(使用面积㎡), "
+        "空间类型=VALUES(空间类型), 上下水=VALUES(上下水), 电力功率上限kW=VALUES(电力功率上限kW), "
+        "装修情况=VALUES(装修情况), 租金报价元㎡天=VALUES(租金报价元㎡天), 改造条件=VALUES(改造条件), "
+        "户型图路径=VALUES(户型图路径), 现状照片路径=VALUES(现状照片路径), "
+        "建筑面积㎡=VALUES(建筑面积㎡), 使用面积㎡=VALUES(使用面积㎡), "
+        "计租面积㎡=VALUES(计租面积㎡), "
         "基准租金元㎡天=VALUES(基准租金元㎡天), 备注=VALUES(备注)",
         params_list
     )
@@ -219,7 +239,8 @@ CONTRACT_COLS = [
     "意向金抵扣押金", "已付补缴押金",
     "支付周期", "合同状态", "联系电话", "联系人", "备注", "签约主体", "租金模式",
     "物业服务费单价元㎡天", "免租计划",
-    "保底租金计划", "提成扣点计划", "物业费计划"
+    "保底租金计划", "提成扣点计划", "物业费计划",
+    "终止原因", "前序合同号"
 ]
 
 def load_contracts(project_filter=None):
@@ -306,10 +327,12 @@ def save_contracts(data):
             json.dumps(c.get("保底租金计划", []) if c.get("保底租金计划") else [], ensure_ascii=False),
             json.dumps(c.get("提成扣点计划", []) if c.get("提成扣点计划") else [], ensure_ascii=False),
             json.dumps(c.get("物业费计划", []) if c.get("物业费计划") else [], ensure_ascii=False),
+            c.get("终止原因", ""),
+            c.get("前序合同号", ""),
         ))
     _execute_many(
         "INSERT INTO contracts (" + ", ".join(CONTRACT_COLS) + ") "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE "
         "商户名称=VALUES(商户名称), 经营业态=VALUES(经营业态), 所属项目=VALUES(所属项目), "
         "关联铺位号=VALUES(关联铺位号), 保底租金元㎡天=VALUES(保底租金元㎡天), "
@@ -321,7 +344,8 @@ def save_contracts(data):
         "支付周期=VALUES(支付周期), 合同状态=VALUES(合同状态), 联系电话=VALUES(联系电话), "
         "联系人=VALUES(联系人), 备注=VALUES(备注), 签约主体=VALUES(签约主体), 租金模式=VALUES(租金模式), "
         "物业服务费单价元㎡天=VALUES(物业服务费单价元㎡天), 免租计划=VALUES(免租计划), "
-        "保底租金计划=VALUES(保底租金计划), 提成扣点计划=VALUES(提成扣点计划), 物业费计划=VALUES(物业费计划)",
+        "保底租金计划=VALUES(保底租金计划), 提成扣点计划=VALUES(提成扣点计划), 物业费计划=VALUES(物业费计划), "
+        "终止原因=VALUES(终止原因), 前序合同号=VALUES(前序合同号)",
         params_list
     )
     return True
@@ -331,9 +355,12 @@ def delete_contract(contract_no):
     return True
 
 def get_shop_area(shop_no):
-    rows = _execute("SELECT 建筑面积㎡ FROM shops WHERE 铺位号 = %s", (shop_no,), fetch=True)
+    rows = _execute("SELECT 计租面积㎡ FROM shops WHERE 铺位号 = %s", (shop_no,), fetch=True)
     if rows and rows[0][0] is not None:
         return float(rows[0][0])
+    rows2 = _execute("SELECT 建筑面积㎡ FROM shops WHERE 铺位号 = %s", (shop_no,), fetch=True)
+    if rows2 and rows2[0][0] is not None:
+        return float(rows2[0][0])
     return 0.0
 
 # ===================== 缴费记录 =====================
@@ -692,7 +719,7 @@ def create_merchant_account(username, contract_no, merchant_name, hashed_passwor
 def get_merchant_account_by_username(username):
     """根据用户名获取商户账户，返回 dict 或 None"""
     rows = _execute(
-        "SELECT username, contract_no, merchant_name, password FROM merchant_accounts WHERE username = %s",
+        "SELECT username, contract_no, merchant_name, password FROM merchant_accounts WHERE BINARY username = %s",
         (username,), fetch=True
     )
     if not rows:
@@ -723,7 +750,7 @@ def update_merchant_password(contract_no, new_hashed_password):
     return True
 
 # ===================== 仪表板统计 =====================
-def get_dashboard_stats(project_filter=None):
+def get_dashboard_stats(project_filter=None, year=None):
     """获取仪表板统计数据（完整版，与桌面原型对齐）"""
     from datetime import date, datetime
     today = date.today()
@@ -827,7 +854,7 @@ def get_dashboard_stats(project_filter=None):
     monthly_rent = {}
     for m in range(1, 13):
         monthly_rent[str(m)] = {"应收": 0.0, "已收": 0.0}
-    cur_year = today.year
+    cur_year = year if year else today.year
     for c in contracts:
         try:
             plan = _utils.generate_rent_plan(c, _shops_cache=shops_cache, _payments_cache=payments_cache)

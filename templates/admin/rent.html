@@ -164,7 +164,7 @@ input[type="number"] { -moz-appearance: textfield; }
             <table class="plan-table" id="planTable">
                 <thead>
                     <tr>
-                        <th>序号</th><th>支付时间</th><th>保底租金</th><th>提成扣点</th><th>物业费</th>
+                        <th>序号</th><th>支付时间</th><th>固定租金</th><th>提成扣点</th><th>物业费</th>
                         <th>应缴租金</th><th>应缴物业费</th><th>意向金抵扣</th><th>本期应缴</th><th>已缴租金</th><th>已缴物业费</th>
                     </tr>
                 </thead>
@@ -192,14 +192,21 @@ let currentContractData = {};
 function openModal(id) { document.getElementById(id).classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
-// ===== 全选 =====
+// ===== 全选（仅可见行）=====
 function toggleAllChecks(cb) {
-    document.querySelectorAll('.row-check').forEach(c => c.checked = cb.checked);
+    document.querySelectorAll('#rentTableBody tr').forEach(tr => {
+        if (tr.style.display !== 'none') {
+            const c = tr.querySelector('.row-check');
+            if (c) c.checked = cb.checked;
+        }
+    });
 }
 
-// 顶部收缴计划按钮：取选中行打开
+// 顶部收缴计划按钮：取选中行打开（仅可见行）
 function openSelectedPlan() {
-    const checked = Array.from(document.querySelectorAll('.row-check:checked'));
+    const checked = Array.from(document.querySelectorAll('.row-check:checked')).filter(cb => {
+        const tr = cb.closest('tr'); return tr && tr.style.display !== 'none';
+    });
     if (!checked.length) { alert('请先选择一个合同'); return; }
     if (checked.length > 1) { alert('收缴计划一次只能查看一个合同，请只选择一个'); return; }
     showPlan(checked[0].value);
@@ -240,7 +247,7 @@ function showPlan(cno) {
 
             let infoHtml = '';
             // 第1层：标题行
-            infoHtml += `<div class="plan-title-line">${c.合同号}　${c.商户名称}　${c.经营业态}　${c.所属项目}　${c.关联铺位号}</div>`;
+            infoHtml += `<div class="plan-title-line">${c.合同号}　${c.商户名称}　${c.经营业态}　${c.所属项目}　${c.关联铺位号}${c['空间类型'] ? '（' + c['空间类型'] + '）' : ''}</div>`;
             // 第2层：联系人
             infoHtml += `<div class="plan-contact-line">联系人：${c.联系人}　　联系电话：${c.联系电话}</div>`;
             // 分隔线
@@ -254,8 +261,8 @@ function showPlan(cno) {
             infoHtml += `</div>`;
             // 第4层：费用/押金类
             infoHtml += `<div class="plan-fields-row">`;
-            infoHtml += `<span><b>租金模式：</b>${c.租金模式}</span>`;
-            infoHtml += `<span><b>建筑面积：</b>${c.建筑面积}㎡</span>`;
+            infoHtml += `<span><b>租金模式：</b>${c.租金模式 === '保底' ? '固定租金' : c.租金模式}</span>`;
+            infoHtml += `<span><b>计租面积：</b>${c.建筑面积}㎡${c['计租面积来源'] ? '（' + c['计租面积来源'] + '）' : ''}</span>`;
             infoHtml += `<span><b>押金：</b>${c.押金}</span>`;
             infoHtml += `<span><b>已付押金：</b>${(parseFloat(c.意向金抵扣押金||0) + parseFloat(c.已付补缴押金||0)).toFixed(2)}</span>`;
             infoHtml += `</div>`;
@@ -364,7 +371,9 @@ function savePlanChanges() {
 
 // ===== 催缴函（选择一次保存目录，逐个生成并写入）=====
 async function generateDemandLetter() {
-    const checked = document.querySelectorAll('.row-check:checked');
+    const checked = Array.from(document.querySelectorAll('.row-check:checked')).filter(cb => {
+        const tr = cb.closest('tr'); return tr && tr.style.display !== 'none';
+    });
     if (!checked.length) { alert('请先选择合同'); return; }
     if (!('showDirectoryPicker' in window)) {
         alert('当前浏览器不支持选择保存路径，请使用 Chrome 或 Edge');
@@ -456,6 +465,12 @@ function applyRentFilter() {
             sumTrm += parseFloat(tds[10].textContent.replace(/[^0-9.-]/g,'')) || 0;
             sumAr += parseFloat(tds[14].textContent.replace(/[^0-9.-]/g,'')) || 0;
         }
+    });
+
+    // 清除隐藏行的选中状态
+    document.querySelectorAll('.row-check:checked').forEach(cb => {
+        const tr = cb.closest('tr');
+        if (tr && tr.style.display === 'none') cb.checked = false;
     });
 
     // 更新合计行（对齐原型列顺序）

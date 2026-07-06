@@ -1,28 +1,19 @@
 {% extends "base.html" %}
-{% block title %}LCP商管 · 商铺管理{% endblock %}
+{% block title %}LCP商管 · 空间管理{% endblock %}
 {% block head %}
 <style>
-.checkbox-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px 8px; }
-.checkbox-grid label { font-size: 12px; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 3px; }
-.checkbox-grid input[type="checkbox"] { margin: 0; }
 .filter-ext { display: flex; gap: 6px; align-items: center; font-size: 12px; color: #888; }
 .filter-ext input { width: 70px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; }
-.biz-chips { display: flex; flex-wrap: wrap; gap: 3px; }
-.biz-chip { font-size: 11px; padding: 2px 7px; border-radius: 10px; background: #eef2ff; color: #4361ee; white-space: nowrap; }
-th .check-all { margin: 0; }
 .error-tip { display:none; font-size:11px; color:#e53935; margin-top:2px; }
-.filter-biz-group { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; font-size: 12px; color: #888; }
-.filter-biz-group label { cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 2px; }
-.filter-biz-group input[type="checkbox"] { margin: 0; }
 </style>
 {% endblock %}
 {% block content %}
 <div class="page-header">
-    <h1 class="page-title">🏪 商铺管理</h1>
+    <h1 class="page-title">🏪 空间管理</h1>
     <div class="btn-group">
-        <button class="btn btn-primary" onclick="openModal('shopModal')">+ 新增商铺</button>
-        <button class="btn btn-outline btn-sm" onclick="batchEdit()">✏️ 编辑商铺</button>
-        <button class="btn btn-danger btn-sm" onclick="batchDelete()">🗑️ 删除商铺</button>
+        <button class="btn btn-primary" onclick="openModal('shopModal')">+ 新增空间</button>
+        <button class="btn btn-outline btn-sm" onclick="batchEdit()">✏️ 编辑空间</button>
+        <button class="btn btn-danger btn-sm" onclick="batchDelete()">🗑️ 删除空间</button>
     </div>
 </div>
 
@@ -54,30 +45,24 @@ th .check-all { margin: 0; }
         <button class="btn btn-sm btn-outline" onclick="clearFilter()">✕ 清空条件</button>
         <span style="font-size:12px;color:#888;margin-left:8px;" id="selectedCount">已选 0 条</span>
     </div>
-    <div class="filter-biz-group" style="margin-top:6px;">
-        <span>业态筛选：</span>
-        {% for b in biz_types %}
-        <label><input type="checkbox" value="{{ b }}" class="filter-biz-cb" onchange="applyFilter()"> {{ b }}</label>
-        {% endfor %}
-    </div>
 
     <!-- 表格 -->
     <div class="table-wrapper" style="max-height:calc(100vh - 280px); overflow-y:auto;">
         <table id="shopTable">
             <thead>
                 <tr>
-                    <th style="width:36px;"><input type="checkbox" class="check-all" onclick="toggleAll(this)"></th>
+                    <th style="width:36px;"></th>
                     <th style="width:40px;">序号</th>
                     <th>铺位号</th><th>所属项目</th><th>位置</th><th>铺位状态</th>
-                    <th>适用业态</th><th style="text-align:center !important">建筑面积(㎡)</th><th style="text-align:center !important">使用面积(㎡)</th>
+                    <th>空间类型</th><th>上下水</th><th>电力(kW)</th><th>装修</th>
+                    <th style="text-align:center !important">租金报价</th><th style="text-align:center !important">建筑面积(㎡)</th><th style="text-align:center !important">使用面积(㎡)</th><th style="text-align:center !important">计租面积(㎡)</th>
                     <th style="text-align:center !important">基准租金</th><th>备注</th>
                 </tr>
             </thead>
             <tbody>
                 {% for s in shops %}
                 <tr data-project="{{ s.所属项目 }}" data-status="{{ s.铺位状态 }}"
-                    data-area="{{ s['建筑面积(㎡)'] or 0 }}" data-rent="{{ s['基准租金(元/㎡/天)'] or 0 }}"
-                    data-biz="{{ s.适用业态 or '' }}">
+                    data-area="{{ s['计租面积(㎡)'] or s['建筑面积(㎡)'] or 0 }}" data-rent="{{ s['基准租金(元/㎡/天)'] or 0 }}">
                     <td><input type="checkbox" name="ids" value="{{ s.铺位号 }}" class="row-check"></td>
                     <td>{{ loop.index }}</td>
                     <td><strong>{{ s.铺位号 }}</strong></td>
@@ -90,17 +75,14 @@ th .check-all { margin: 0; }
                         {% elif s.铺位状态 == '退场交接' %}<span class="badge badge-expired">退场交接</span>
                         {% else %}{{ s.铺位状态 }}{% endif %}
                     </td>
-                    <td>
-                        {% if s.适用业态 %}
-                        <div class="biz-chips">
-                            {% for bt in s.适用业态.split('、') %}
-                            {% if bt %}<span class="biz-chip">{{ bt }}</span>{% endif %}
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                    </td>
+                    <td>{{ s['空间类型'] }}</td>
+                    <td>{{ s['上下水'] }}</td>
+                    <td style="text-align:center !important">{{ s['电力功率上限(kW)'] }}</td>
+                    <td>{{ s['装修情况'] }}</td>
+                    <td style="text-align:center !important">{{ s['租金报价(元/㎡/天)'] }}</td>
                     <td style="text-align:center !important">{{ s['建筑面积(㎡)'] }}</td>
                     <td style="text-align:center !important">{{ s['使用面积(㎡)'] }}</td>
+                    <td style="text-align:center !important">{{ s['计租面积(㎡)'] }}</td>
                     <td style="text-align:center !important">{{ s['基准租金(元/㎡/天)'] }}</td>
                     <td>{{ s.备注[:20] }}{% if s.备注|length > 20 %}...{% endif %}</td>
                 </tr>
@@ -114,7 +96,7 @@ th .check-all { margin: 0; }
 <div class="modal-overlay" id="shopModal">
     <div class="modal-box">
         <button class="modal-close" onclick="closeModal('shopModal')">✕</button>
-        <h3 id="shopModalTitle">新增商铺</h3>
+        <h3 id="shopModalTitle">新增空间</h3>
         <form method="POST" action="/admin/shops/add" id="shopForm" onsubmit="return prepareShopSubmit(event)">
             <div class="form-grid">
                 <div class="form-group"><label>铺位号 *</label><input name="铺位号" id="shopNo"><span id="shopNoTip" class="error-tip"></span></div>
@@ -130,16 +112,25 @@ th .check-all { margin: 0; }
                         {% for s in shop_statuses %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
                     </select>
                 </div>
-                <div class="form-group" style="grid-column:1/-1;"><label>适用业态（可多选）</label>
-                    <div class="checkbox-grid" id="bizCheckboxes">
-                        {% for b in biz_types %}
-                        <label><input type="checkbox" value="{{ b }}" class="biz-checkbox"> {{ b }}</label>
-                        {% endfor %}
-                    </div>
-                    <input type="hidden" name="适用业态" id="bizTypeHidden">
+                <div class="form-group"><label>空间类型</label>
+                    <select name="空间类型" id="shopSpaceType" onchange="autoFillRentableArea()"><option value="">请选择</option><option>商铺</option><option>室外场地</option></select>
                 </div>
-                <div class="form-group"><label>建筑面积(㎡)</label><input name="建筑面积" id="shopArea" type="number" step="0.01"><span id="shopAreaTip" class="error-tip"></span></div>
-                <div class="form-group"><label>使用面积(㎡)</label><input name="使用面积" id="shopUseArea" type="number" step="0.01"><span id="shopUseAreaTip" class="error-tip"></span></div>
+                <div class="form-group"><label>建筑面积(㎡)</label><input name="建筑面积" id="shopArea" type="number" step="0.01" oninput="autoFillRentableArea()"><span id="shopAreaTip" class="error-tip"></span></div>
+                <div class="form-group"><label>使用面积(㎡)</label><input name="使用面积" id="shopUseArea" type="number" step="0.01" oninput="autoFillRentableArea()"><span id="shopUseAreaTip" class="error-tip"></span></div>
+                <div class="form-group"><label>计租面积(㎡)</label><input name="计租面积" id="shopRentableArea" type="number" step="0.01" readonly style="background:#f5f5f5;"><span id="shopRentableAreaTip" class="error-tip"></span></div>
+                <div class="form-group" style="grid-column:1/-1;"><label>上下水</label>
+                    <div style="display:flex;gap:16px;margin-top:4px;">
+                        <label style="font-weight:400;font-size:13px;"><input type="checkbox" id="shopWaterUp" value="上水"> 上水</label>
+                        <label style="font-weight:400;font-size:13px;"><input type="checkbox" id="shopWaterDown" value="下水"> 下水</label>
+                    </div>
+                    <input type="hidden" name="上下水" id="shopWater">
+                </div>
+                <div class="form-group"><label>电力功率上限(kW)</label><input name="电力功率上限" id="shopPower" type="number" step="0.1"><span id="shopPowerTip" class="error-tip"></span></div>
+                <div class="form-group"><label>装修情况</label>
+                    <select name="装修情况" id="shopDecoration"><option value="">请选择</option><option>毛坯</option><option>半毛坯</option><option>精装</option></select>
+                </div>
+                <div class="form-group"><label>租金报价(元/㎡/天)</label><input name="租金报价" id="shopQuote" type="number" step="0.01"><span id="shopQuoteTip" class="error-tip"></span></div>
+                <div class="form-group" style="grid-column:1/-1;"><label>改造条件</label><textarea name="改造条件" id="shopRenovation" rows="2"></textarea></div>
                 <div class="form-group"><label>基准租金(元/㎡/天)</label><input name="基准租金" id="shopRent" type="number" step="0.01"><span id="shopRentTip" class="error-tip"></span></div>
                 <div class="form-group"><label>备注</label><input name="备注" id="shopRemark"></div>
             </div>
@@ -155,7 +146,6 @@ th .check-all { margin: 0; }
 {% block scripts %}
 <script>
 const shopsData = {{ shops | tojson | safe }};
-const bizTypes = {{ biz_types | tojson | safe }};
 let shopIsEdit = false;
 
 function _showTip(inputId, msg) {
@@ -178,7 +168,7 @@ function _clearAllTips() {
 function openModal(id) {
     const el = document.getElementById(id);
     el.classList.add('show');
-    if (id === 'shopModal' && document.getElementById('shopModalTitle').textContent === '新增商铺') {
+        if (id === 'shopModal' && document.getElementById('shopModalTitle').textContent === '新增空间') {
         resetShopForm();
     }
 }
@@ -191,14 +181,21 @@ function resetShopForm() {
     document.getElementById('shopProject').value = window._isSubcompany ? window._currentUserProject : '';
     document.getElementById('shopLocation').value = '';
     document.getElementById('shopStatus').value = '空置';
+    document.getElementById('shopSpaceType').value = '';
+    document.getElementById('shopWater').value = '';
+    document.getElementById('shopWaterUp').checked = false;
+    document.getElementById('shopWaterDown').checked = false;
+    document.getElementById('shopPower').value = '';
+    document.getElementById('shopDecoration').value = '';
+    document.getElementById('shopQuote').value = '';
+    document.getElementById('shopRenovation').value = '';
     document.getElementById('shopArea').value = '';
     document.getElementById('shopUseArea').value = '';
+    document.getElementById('shopRentableArea').value = '';
     document.getElementById('shopRent').value = '';
     document.getElementById('shopRemark').value = '';
-    document.getElementById('shopModalTitle').textContent = '新增商铺';
+        document.getElementById('shopModalTitle').textContent = '新增空间';
     shopIsEdit = false;
-    document.querySelectorAll('#bizCheckboxes .biz-checkbox').forEach(cb => cb.checked = false);
-    document.getElementById('bizTypeHidden').value = '';
 }
 
 function editShop(shopNo) {
@@ -206,38 +203,52 @@ function editShop(shopNo) {
     if (!s) return;
     _clearAllTips();
     shopIsEdit = true;
-    document.getElementById('shopModalTitle').textContent = '编辑商铺 - ' + shopNo;
+    document.getElementById('shopModalTitle').textContent = '编辑空间 - ' + shopNo;
     document.getElementById('shopNo').value = s.铺位号;
     document.getElementById('shopNo').readOnly = true;
     document.getElementById('shopProject').value = s.所属项目;
     document.getElementById('shopLocation').value = s.位置 || '';
     document.getElementById('shopStatus').value = s.铺位状态 || '空置';
+    document.getElementById('shopSpaceType').value = s['空间类型'] || '';
+    const wv = s['上下水'] || '';
+    document.getElementById('shopWaterUp').checked = wv === '上水' || wv === '上下水';
+    document.getElementById('shopWaterDown').checked = wv === '下水' || wv === '上下水';
+    document.getElementById('shopWater').value = wv;
+    document.getElementById('shopPower').value = s['电力功率上限(kW)'] || '';
+    document.getElementById('shopDecoration').value = s['装修情况'] || '';
+    document.getElementById('shopQuote').value = s['租金报价(元/㎡/天)'] || '';
+    document.getElementById('shopRenovation').value = s['改造条件'] || '';
     document.getElementById('shopArea').value = s['建筑面积(㎡)'] || '';
     document.getElementById('shopUseArea').value = s['使用面积(㎡)'] || '';
     document.getElementById('shopRent').value = s['基准租金(元/㎡/天)'] || '';
     document.getElementById('shopRemark').value = s.备注 || '';
-
-    // 适用业态回填
-    document.querySelectorAll('#bizCheckboxes .biz-checkbox').forEach(cb => cb.checked = false);
-    const bizStr = s.适用业态 || '';
-    if (bizStr) {
-        const selected = bizStr.split('、').map(x => x.trim()).filter(Boolean);
-        document.querySelectorAll('#bizCheckboxes .biz-checkbox').forEach(cb => {
-            if (selected.includes(cb.value)) cb.checked = true;
-        });
-    }
+    document.getElementById('shopRentableArea').value = s['计租面积(㎡)'] || '';
 
     openModal('shopModal');
+}
+
+function autoFillRentableArea() {
+    const spaceType = document.getElementById('shopSpaceType').value;
+    const area = document.getElementById('shopArea').value;
+    const useArea = document.getElementById('shopUseArea').value;
+    const ra = document.getElementById('shopRentableArea');
+    if (spaceType === '商铺') {
+        ra.value = area;
+    } else if (spaceType === '室外场地') {
+        ra.value = useArea;
+    } else {
+        ra.value = '';
+    }
 }
 
 async function prepareShopSubmit(evt) {
     evt.preventDefault();
     _clearAllTips();
 
-    // 收集选中的业态
-    const checked = [];
-    document.querySelectorAll('#bizCheckboxes .biz-checkbox:checked').forEach(cb => checked.push(cb.value));
-    document.getElementById('bizTypeHidden').value = checked.join('、');
+    // 收集上下水
+    const up = document.getElementById('shopWaterUp').checked;
+    const down = document.getElementById('shopWaterDown').checked;
+    document.getElementById('shopWater').value = up && down ? '上下水' : up ? '上水' : down ? '下水' : '';
 
     let errors = [];
 
@@ -248,6 +259,8 @@ async function prepareShopSubmit(evt) {
         const area = document.getElementById('shopArea').value;
         const useArea = document.getElementById('shopUseArea').value;
         const rent = document.getElementById('shopRent').value;
+        const power = document.getElementById('shopPower').value;
+        const quote = document.getElementById('shopQuote').value;
 
         if (!no) errors.push({id:'shopNo', msg:'铺位号不能为空'});
         if (!proj) errors.push({id:'shopProject', msg:'请选择所属项目'});
@@ -257,6 +270,10 @@ async function prepareShopSubmit(evt) {
         if (useArea && parseFloat(useArea) <= 0) errors.push({id:'shopUseArea', msg:'使用面积需大于0'});
         if (rent && isNaN(parseFloat(rent))) errors.push({id:'shopRent', msg:'基准租金格式不正确'});
         if (rent && parseFloat(rent) < 0) errors.push({id:'shopRent', msg:'基准租金不能为负数'});
+        if (power && isNaN(parseFloat(power))) errors.push({id:'shopPower', msg:'电力功率格式不正确'});
+        if (power && parseFloat(power) <= 0) errors.push({id:'shopPower', msg:'电力功率需大于0'});
+        if (quote && isNaN(parseFloat(quote))) errors.push({id:'shopQuote', msg:'租金报价格式不正确'});
+        if (quote && parseFloat(quote) < 0) errors.push({id:'shopQuote', msg:'租金报价不能为负数'});
 
         // ── AJAX 预检查铺位号重复 ──
         if (errors.length === 0 && no) {
@@ -271,12 +288,18 @@ async function prepareShopSubmit(evt) {
         const area = document.getElementById('shopArea').value;
         const useArea = document.getElementById('shopUseArea').value;
         const rent = document.getElementById('shopRent').value;
+        const power = document.getElementById('shopPower').value;
+        const quote = document.getElementById('shopQuote').value;
         if (area && isNaN(parseFloat(area))) errors.push({id:'shopArea', msg:'建筑面积格式不正确'});
         if (area && parseFloat(area) <= 0) errors.push({id:'shopArea', msg:'建筑面积需大于0'});
         if (useArea && isNaN(parseFloat(useArea))) errors.push({id:'shopUseArea', msg:'使用面积格式不正确'});
         if (useArea && parseFloat(useArea) <= 0) errors.push({id:'shopUseArea', msg:'使用面积需大于0'});
         if (rent && isNaN(parseFloat(rent))) errors.push({id:'shopRent', msg:'基准租金格式不正确'});
         if (rent && parseFloat(rent) < 0) errors.push({id:'shopRent', msg:'基准租金不能为负数'});
+        if (power && isNaN(parseFloat(power))) errors.push({id:'shopPower', msg:'电力功率格式不正确'});
+        if (power && parseFloat(power) <= 0) errors.push({id:'shopPower', msg:'电力功率需大于0'});
+        if (quote && isNaN(parseFloat(quote))) errors.push({id:'shopQuote', msg:'租金报价格式不正确'});
+        if (quote && parseFloat(quote) < 0) errors.push({id:'shopQuote', msg:'租金报价不能为负数'});
     }
 
     if (errors.length > 0) {
@@ -288,13 +311,14 @@ async function prepareShopSubmit(evt) {
     return false;
 }
 
-// 全选
-function toggleAll(cb) {
-    document.querySelectorAll('.row-check').forEach(c => c.checked = cb.checked);
-    updateSelectedCount();
-}
+// 单选
 document.addEventListener('change', function(e) {
-    if (e.target.classList.contains('row-check')) updateSelectedCount();
+    if (e.target.classList.contains('row-check') && e.target.checked) {
+        document.querySelectorAll('.row-check:checked').forEach(c => {
+            if (c !== e.target) c.checked = false;
+        });
+    }
+    updateSelectedCount();
 });
 function updateSelectedCount() {
     const count = document.querySelectorAll('.row-check:checked').length;
@@ -309,16 +333,16 @@ function getSelectedShops() {
 // 批量编辑
 function batchEdit() {
     const selected = getSelectedShops();
-    if (selected.length === 0) { alert('请先勾选要编辑的商铺'); return; }
-    if (selected.length > 1) { alert('编辑商铺一次只能选择一条，请只勾选一个'); return; }
+    if (selected.length === 0) { alert('请先勾选要编辑的空间'); return; }
+    if (selected.length > 1) { alert('编辑空间一次只能选择一条，请只勾选一个'); return; }
     editShop(selected[0]);
 }
 
 // 批量删除
 function batchDelete() {
     const selected = getSelectedShops();
-    if (selected.length === 0) { alert('请先勾选要删除的商铺'); return; }
-    if (!confirm('确定删除选中的 ' + selected.length + ' 个商铺？关联的合同和缴费记录也会一并删除！')) return;
+    if (selected.length === 0) { alert('请先勾选要删除的空间'); return; }
+    if (!confirm('确定删除选中的 ' + selected.length + ' 个空间？关联的合同和缴费记录也会一并删除！')) return;
     // 用 POST 提交
     const form = document.createElement('form');
     form.method = 'POST';
@@ -344,11 +368,6 @@ function applyFilter() {
     const rentMin = parseFloat(document.getElementById('filterRentMin').value) || 0;
     const rentMax = parseFloat(document.getElementById('filterRentMax').value) || Infinity;
 
-    // 收集筛选栏勾选的业态
-    const selectedBiz = [];
-    document.querySelectorAll('.filter-biz-cb:checked').forEach(cb => selectedBiz.push(cb.value));
-    const hasBizFilter = selectedBiz.length > 0;
-
     document.querySelectorAll('#shopTable tbody tr').forEach(tr => {
         const matchProject = !project || tr.dataset.project === project;
         const matchStatus = !status || tr.dataset.status === status;
@@ -357,13 +376,7 @@ function applyFilter() {
         const rent = parseFloat(tr.dataset.rent) || 0;
         const matchArea = area >= areaMin && area <= areaMax;
         const matchRent = rent >= rentMin && rent <= rentMax;
-        // 业态匹配：行适用业态中包含至少一个勾选项
-        let matchBiz = true;
-        if (hasBizFilter) {
-            const rowBiz = (tr.dataset.biz || '').split('、').map(x => x.trim()).filter(Boolean);
-            matchBiz = selectedBiz.every(b => rowBiz.includes(b));
-        }
-        tr.style.display = (matchProject && matchStatus && matchKeyword && matchArea && matchRent && matchBiz) ? '' : 'none';
+        tr.style.display = (matchProject && matchStatus && matchKeyword && matchArea && matchRent) ? '' : 'none';
     });
 }
 
@@ -375,7 +388,6 @@ function clearFilter() {
     document.getElementById('filterAreaMax').value = '';
     document.getElementById('filterRentMin').value = '';
     document.getElementById('filterRentMax').value = '';
-    document.querySelectorAll('.filter-biz-cb').forEach(cb => cb.checked = false);
     applyFilter();
 }
 

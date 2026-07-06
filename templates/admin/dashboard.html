@@ -3,6 +3,7 @@
 {% block head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+<script>if(typeof Chart==='undefined'){document.write('<script src="https://unpkg.com/chart.js@4.4.0/dist/chart.umd.min.js"><\/script><script src="https://unpkg.com/chartjs-plugin-datalabels@2"><\/script>')}</script>
 <style>
 /* ===== 仪表板专用样式 ===== */
 .dash-header {
@@ -14,7 +15,7 @@
     display: flex; gap: 8px; margin-top: 16px; margin-bottom: 16px;
 }
 .dash-top-left { flex: 1; display: flex; flex-direction: column; gap: 8px; }
-.dash-top-right { flex: 1; min-width: 300px; max-width: 50%; display: flex; flex-direction: column; }
+.dash-top-right { flex: 0.65; min-width: 280px; max-width: 40%; display: flex; flex-direction: column; }
 
 /* 卡片通用 */
 .shop-info-card, .right-card, .biz-dist-card {
@@ -34,8 +35,8 @@
     flex: 1; display: flex; flex-direction: column;
 }
 .biz-dist-body {
-    flex: 1; padding: 10px; display: flex; align-items: center; justify-content: center;
-    position: relative; min-height: 0;
+    padding: 10px; display: flex; align-items: center; justify-content: center;
+    position: relative; height: 330px;
 }
 .biz-dist-body canvas { max-width: 100%; max-height: 100%; }
 .biz-dist-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 4px; flex-shrink: 0; }
@@ -186,7 +187,7 @@
 @media (max-width: 1200px) {
     .dash-top-row { flex-direction: column; }
     .dash-top-right { max-width: none; min-width: 0; }
-    .biz-dist-body { min-height: 250px; }
+    .biz-dist-body { height: 300px; }
     .shop-info-body { flex-direction: column; }
     .biz-content-row, .biz-bottom-row { flex-direction: column; }
 }
@@ -326,7 +327,7 @@
 
 <!-- ===== 第二行：租金总览（KPI卡片 + 月度表格） ===== -->
 <div class="rent-section">
-    <div class="rent-section-header">📊 <span id="monthlyRentYear"></span>年每月租金情况</div>
+    <div class="rent-section-header">📊 <select id="rentYear" onchange="changeRentYear()" style="font-size:13px;padding:2px 6px;border:1px solid #ddd;border-radius:4px;background:#fff;"></select>年每月租金情况</div>
     <!-- 月度租金表格 -->
     <div style="padding: 8px; overflow-x: auto;">
         <table class="rent-monthly-table">
@@ -411,7 +412,7 @@
         </div>
         <div class="biz-right">
             <div class="biz-panel" style="min-height:260px;">
-                <h4>📈 近7天销售额趋势</h4>
+                <h4>📈 本周销售额趋势 <span id="weekChartSub" style="font-weight:400;font-size:12px;color:#888;"></span></h4>
                 <div class="chart-wrap" style="height:220px;">
                     <canvas id="weekLineChart"></canvas>
                 </div>
@@ -533,7 +534,15 @@ function initBizDistPie() {
 
 document.addEventListener('DOMContentLoaded', function() {
     initBizDistPie();
-    document.getElementById('monthlyRentYear').textContent = new Date().getFullYear();
+    // 填充年份下拉
+    const yrSel = document.getElementById('rentYear');
+    const curYr = {{ sel_year }};
+    for (let y = curYr - 5; y <= curYr + 1; y++) {
+        const opt = document.createElement('option');
+        opt.value = y; opt.textContent = y + '年';
+        if (y === curYr) opt.selected = true;
+        yrSel.appendChild(opt);
+    }
     if (allDates.length > 0) {
         document.getElementById('bizDate').value = allDates[0];
     }
@@ -548,6 +557,11 @@ document.addEventListener('DOMContentLoaded', function() {
     refreshBizDashboard();
 });
 
+function changeRentYear() {
+    const y = document.getElementById('rentYear').value;
+    location.href = '?year=' + y;
+}
+
 function refreshBizDashboard() {
     const dateStr = document.getElementById('bizDate').value;
     const project = document.getElementById('bizProject').value;
@@ -560,7 +574,13 @@ function refreshBizDashboard() {
         .then(data => {
             renderAllBiz(data);
         })
-        .catch(err => console.error('biz-dashboard error:', err));
+        .catch(err => {
+            console.error('biz-dashboard error:', err);
+            document.querySelectorAll('#bizKpiRow .biz-kpi-card .kpi-value').forEach(el => {
+                el.textContent = '⚠ 加载失败';
+                el.style.color = '#e53935';
+            });
+        });
 }
 
 function renderAllBiz(data) {
@@ -638,7 +658,7 @@ function renderAllBiz(data) {
     kpiCards[1].querySelector('.kpi-value').textContent = fmtMoney(totalSales);
     // [2] 日环比
     const momEl = kpiCards[2].querySelector('.kpi-value');
-    if (momVal === null || momVal === 0) {
+    if (momVal === null) {
         momEl.textContent = '—';
         momEl.className = 'kpi-value';
         momEl.style.color = '#2980b9';
@@ -649,7 +669,7 @@ function renderAllBiz(data) {
     }
     // [3] 同比上周
     const wowEl = kpiCards[3].querySelector('.kpi-value');
-    if (wowVal === null || wowVal === 0) {
+    if (wowVal === null) {
         wowEl.textContent = '—';
         wowEl.className = 'kpi-value';
         wowEl.style.color = '#2980b9';
@@ -685,12 +705,9 @@ function switchTop10(metric) {
     document.querySelectorAll('#top10Tabs .top10-tab').forEach(t => {
         t.classList.toggle('active', t.dataset.metric === metric);
     });
-    // 直接拿当前渲染的数据
-    const dateStr = document.getElementById('bizDate').value;
-    const project = document.getElementById('bizProject').value;
-    fetch(`/api/biz-dashboard?date=${encodeURIComponent(dateStr)}&project=${encodeURIComponent(project)}`)
-        .then(r => r.json())
-        .then(data => renderTop10(data.records, metric));
+    if (window._bizAllRecords && window._bizAllRecords.length) {
+        renderTop10(window._bizAllRecords, metric);
+    }
 }
 
 function renderTop10(records, metric) {
@@ -753,6 +770,10 @@ function renderWeekChart(records) {
     const diffToMonday = (dayOfWeek === 0) ? -6 : 1 - dayOfWeek;
     const thisMonday = new Date(curDate);
     thisMonday.setDate(curDate.getDate() + diffToMonday);
+    const thisSunday = new Date(thisMonday);
+    thisSunday.setDate(thisMonday.getDate() + 6);
+    document.getElementById('weekChartSub').textContent =
+        '(' + toLocalDateStr(thisMonday) + ' ~ ' + toLocalDateStr(thisSunday) + ')';
 
     const weekLabels = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日'];
     const thisWeekVals = [];

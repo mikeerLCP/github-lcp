@@ -24,7 +24,7 @@ def generate_rent_plan(contract, _shops_cache=None, _payments_cache=None, _biz_c
             for shop in _shops_cache:
                 if str(shop.get("铺位号", "")).strip() == str(shop_no).strip():
                     try:
-                        area = float(shop.get("建筑面积(㎡)", shop.get("计租面积(㎡)", 0) or 0))
+                        area = float(shop.get("计租面积(㎡)", shop.get("建筑面积(㎡)", 0) or 0))
                     except:
                         area = 0.0
                     break
